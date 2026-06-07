@@ -177,6 +177,10 @@ jobs:
           unzip -q "$(basename "$OUT_IPA")"
           
           touch Payload/softgaypaws.com
+
+          if [ -d "Payload/Spotify.app/com.apple.WatchPlaceholder" ]; then
+            rm -rf Payload/Spotify.app/com.apple.WatchPlaceholder
+          fi
           
           if [ -d "Payload/Spotify.app/Watch" ]; then
             rm -rf Payload/Spotify.app/Watch
@@ -193,7 +197,7 @@ jobs:
           
       - name: Create Patched Duplicate & LC-inject zxPluginsInject
         run: |
-          PATCHED_OUT="${OUT_IPA%.ipa}-Patched.ipa"
+          PATCHED_OUT="${OUT_IPA%.ipa}-patched.ipa"
           cp "$OUT_IPA" "$PATCHED_OUT"
           ipapatch --input "$PATCHED_OUT" --inplace --noconfirm \
                    --dylib packages/zxPluginsInject.dylib
@@ -286,11 +290,11 @@ jobs:
 
               changelog_text = re.sub(r'^(#+)\s+(.+)$', r'**\2**', changelog_text, flags=re.MULTILINE)
                    
-              full_caption = os.environ['CAPTION'] + "\n\n" + changelog_text
+              full_caption = os.environ['CAPTION'] + "\n" + changelog_text
               if len(full_caption) > 1024:
                   full_caption = full_caption[:1020] + "..."
               
-              print("zooming regular ipa to telegram with multiple connections... >w<")
+              print("Uploading with FastTelethonhelper")
               reg_file = await fast_upload(client, os.environ['REGULAR_IPA'])
               
               print("zooming patched ipa... *speedy paws*")
@@ -298,7 +302,7 @@ jobs:
               
               captions = ["", full_caption]
               
-              print("bundling them up and sending to the channel! :3")
+              print("Sending to channel")
               await client.send_file(chat_id, [reg_file, patched_file], caption=captions)
               await client.disconnect()
 
