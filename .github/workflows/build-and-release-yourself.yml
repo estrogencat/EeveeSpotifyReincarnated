@@ -4,14 +4,34 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "URL to a decrypted Spotify IPA"
+        description: "url to a decrypted spotify ipa"
         default: ""
         required: true
         type: string
       tweak_url:
-        description: "URL to a prebuilt EeveeSpotify .deb"
+        description: "url to a prebuilt eeveespotify .deb"
         default: ""
         required: true
+        type: string
+      use_alt_name:
+        description: "testflight?"
+        default: false
+        required: true
+        type: boolean
+      upload_to_alt_repo:
+        description: "multi upload"
+        default: false
+        required: true
+        type: boolean
+      upload_to_telegram:
+        description: "upload to telegram channel"
+        default: false
+        required: true
+        type: boolean
+      changelog_changer:
+        description: "chuds. all of u."
+        default: ""
+        required: false
         type: string
 
 env:
@@ -31,6 +51,19 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '16.2.0'
+
+      - name: get current time for build date
+        id: time
+        run: |
+          echo "timestamp=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+          
+      - name: set filename prefix
+        run: |
+          if [ "${{ inputs.use_alt_name }}" = "true" ]; then
+            echo "FILE_PREFIX=TestFlight-ES" >> $GITHUB_ENV
+          else
+            echo "FILE_PREFIX=EeveeSpotify" >> $GITHUB_ENV
+          fi
 
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
@@ -63,7 +96,6 @@ jobs:
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           python3 -m pip install --upgrade --break-system-packages \
               git+https://github.com/asdfzxcvbn/pyzule-rw.git
-          # releases/latest/download redirect avoids api.github.com rate limit (anon 60/hr -> 403)
           ARCH=$(uname -m); [ "$ARCH" = "x86_64" ] && SUFFIX=macos-amd64 || SUFFIX=macos-arm64
           sudo curl -fsSL "https://github.com/asdfzxcvbn/ipapatch/releases/latest/download/ipapatch.${SUFFIX}" \
               -o /usr/local/bin/ipapatch
@@ -86,7 +118,17 @@ jobs:
 
           SPOT_VERSION=$(unzip -p ${{ github.workspace }}/spotify.ipa 'Payload/Spotify.app/Info.plist' \
               | plutil -extract CFBundleShortVersionString raw - 2>/dev/null || echo "unknown")
-          OUT="Outputs/IPAS/EeveeSpotify-${SPOT_VERSION}.ipa"
+              
+          if [ -f "$DEB_EXTRACT/control" ]; then
+            EEVEE_VERSION=$(grep -E '^Version:' "$DEB_EXTRACT/control" | awk '{print $2}')
+          else
+            EEVEE_VERSION=$(grep -E '^Version:' "$DEB_EXTRACT/DEBIAN/control" | awk '{print $2}')
+          fi
+          
+          OUT="Outputs/IPAS/${{ env.FILE_PREFIX }}-${SPOT_VERSION}-ESR-${EEVEE_VERSION}.ipa"
+          
+          echo "SPOTIFY_VERSION=$SPOT_VERSION" >> $GITHUB_ENV
+          echo "TWEAK_VERSION=$EEVEE_VERSION" >> $GITHUB_ENV
 
           INJECT=("$DYLIB_SRC")
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
@@ -95,11 +137,6 @@ jobs:
           cyan -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
-
-      - name: LC-inject zxPluginsInject (ipapatch)
-        run: |
-          ipapatch --input "$OUT_IPA" --inplace --noconfirm \
-                   --dylib packages/zxPluginsInject.dylib
 
       - name: Strip Watch app (if any survived)
         run: |
@@ -116,10 +153,124 @@ jobs:
         run: |
           chmod +x Tools/alt-icons.sh
           Tools/alt-icons.sh "$OUT_IPA"
+          
+      - name: Create Patched Duplicate & LC-inject zxPluginsInject
+        run: |
+          PATCHED_OUT="${OUT_IPA%.ipa}-Patched.ipa"
+          cp "$OUT_IPA" "$PATCHED_OUT"
+          ipapatch --input "$PATCHED_OUT" --inplace --noconfirm \
+                   --dylib packages/zxPluginsInject.dylib
+          echo "PATCHED_IPA=$PATCHED_OUT" >> $GITHUB_ENV
+          
+      - name: Fetch original changelog and append warning
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat << 'EOF' > changelog.txt
+          # this might not be the latest changelog for the tweak version!
+          
+          * this only grabs from releases/latest as there is no changelog in actions. to check if it is newer than the release, go to commits in the original repo @ [GitHub](https://github.com/jaydenjcpy/EeveeSpotifyReincarnated) :P
+          ---
+          ### original changelog:
+          
+          EOF
+          gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
 
-      - name: Upload IPA artifact
+      - name: Upload IPA artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: EeveeSpotify-IPA
-          path: ${{ env.OUT_IPA }}
+          name: EeveeSpotify-IPAs
+          path: Outputs/IPAS/*.ipa
           if-no-files-found: error
+          
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          body_path: changelog.txt
+          tag_name: ${{ env.TWEAK_VERSION }}-${{ steps.time.outputs.timestamp }}
+          name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ steps.time.outputs.timestamp }}
+          files: |
+            Outputs/IPAS/*.ipa
+
+      - name: Upload to EeveeIPA Releases
+        if: ${{ inputs.upload_to_alt_repo == true }}
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          repository: 'estrogencat/EeveeIPA'
+          token: ${{ secrets.ALT_REPO_TOKEN }}
+          body_path: changelog.txt
+          tag_name: ${{ env.SPOTIFY_VERSION }}-${{ env.TWEAK_VERSION }}-${{ steps.time.outputs.timestamp }}
+          name: ${{ env.SPOTIFY_VERSION }} // Swift ${{ env.TWEAK_VERSION }} // Multi Upload from github.repository
+          files: |
+            Outputs/IPAS/*.ipa
+
+      - name: Install pip packages for Telegram upload
+        if: ${{ inputs.upload_to_telegram == true }}
+        run: pip3 install telethon cryptg FastTelethonhelper --break-system-packages
+
+      - name: Override changelog for telegram
+        if: ${{ inputs.changelog_changer != '' }}
+        env:
+          CUSTOM_LOG: ${{ inputs.changelog_changer }}
+        run: |
+          echo "$CUSTOM_LOG" > changelog.txt
+
+      - name: upload big files to telegram
+        if: ${{ inputs.upload_to_telegram == true }}
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          REGULAR_IPA: "${{ env.OUT_IPA }}"
+          PATCHED_IPA: "${{ env.PATCHED_IPA }}"
+          FILE_PREFIX: "${{ env.FILE_PREFIX }}"
+          CAPTION: |
+            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}
+        run: |
+          cat << 'EOF' > upload.py
+          import os, asyncio, re
+          from telethon import TelegramClient
+          from FastTelethonhelper import fast_upload
+
+          api_id = int(os.environ['TG_API_ID'])
+          api_hash = os.environ['TG_API_HASH']
+          bot_token = os.environ['TG_BOT_TOKEN']
+          chat_id = os.environ['TG_CHAT_ID']
+          
+          if chat_id.lstrip('-').isdigit():
+              chat_id = int(chat_id)
+
+          async def main():
+              client = await TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
+              
+              with open('changelog.txt', 'r', encoding='utf-8') as f:
+                  changelog_text = f.read()
+
+              changelog_text = re.sub(r'^(#+)\s+(.+)$', r'**\2**', changelog_text, flags=re.MULTILINE)
+                   
+              full_caption = os.environ['CAPTION'] + "\n\n" + changelog_text
+              if len(full_caption) > 1024:
+                  full_caption = full_caption[:1020] + "..."
+              
+              print("zooming regular ipa to telegram with multiple connections... >w<")
+              reg_file = await fast_upload(client, os.environ['REGULAR_IPA'])
+              
+              print("zooming patched ipa... *speedy paws*")
+              patched_file = await fast_upload(client, os.environ['PATCHED_IPA'])
+              
+              captions = ["", full_caption]
+              
+              print("bundling them up and sending to the channel! :3")
+              await client.send_file(chat_id, [reg_file, patched_file], caption=captions)
+              await client.disconnect()
+
+          asyncio.run(main())
+          EOF
+          
+          python3 upload.py
+
+      - name: Output success for telegram channel
+        if: ${{ inputs.upload_to_telegram == true }}
+        run: |
+          echo "im done bitch ass, check telegram"
