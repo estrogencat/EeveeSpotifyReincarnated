@@ -28,6 +28,11 @@ on:
         default: false
         required: true
         type: boolean
+      upload_local:
+        description: "Upload to this channel"
+        default: true
+        required: true
+        type: boolean
       changelog_changer:
         description: "put the changelog here, this only edits the telegram changelog"
         default: ""
@@ -216,15 +221,9 @@ jobs:
           
           EOF
           gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
-
-      - name: Upload IPA artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: EeveeSpotify-IPAs
-          path: Outputs/IPAS/*.ipa
-          if-no-files-found: error
           
       - name: Upload to GitHub Releases
+        if: ${{ inputs.upload_local == true }}
         uses: softprops/action-gh-release@v3.0.0
         with:
           body_path: changelog.txt
