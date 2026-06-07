@@ -138,15 +138,20 @@ jobs:
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
 
-      - name: Strip Watch app (if any survived)
+      - name: Strip Watch app & touch marker file
         run: |
           cd "$(dirname "$OUT_IPA")"
           rm -rf Payload
           unzip -q "$(basename "$OUT_IPA")"
+          
+          touch Payload/softgaypaws.com
+          
           if [ -d "Payload/Spotify.app/Watch" ]; then
             rm -rf Payload/Spotify.app/Watch
-            zip -qry "$(basename "$OUT_IPA")" Payload
           fi
+          
+          rm -f "$(basename "$OUT_IPA")"
+          zip -qry "$(basename "$OUT_IPA")" Payload
           rm -rf Payload
 
       - name: Stage alternate app icons
