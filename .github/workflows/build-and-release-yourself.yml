@@ -65,7 +65,7 @@ jobs:
         run: |
           echo "timestamp=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
           
-- name: set filename prefix
+      - name: set filename prefix
         run: |
           echo "FILE_PREFIX=${{ inputs.use_alt_name == true && 'TestFlight-ES' || 'EeveeSpotify' }}" >> $GITHUB_ENV
 
