@@ -116,12 +116,12 @@ jobs:
           mv "$DEB_FILE" ${{ github.workspace }}/eevee.deb
           rm -rf ${{ github.workspace }}/artifact-temp
 
-#      - name: Setup Theos (only needed for zxPluginsInject build)
-#        uses: actions/checkout@v4
-#        with:
-#          repository: theos/theos
-#          path: ${{ github.workspace }}/theos
-#          submodules: recursive
+      - name: Setup Theos (only needed for zxPluginsInject build)
+        uses: actions/checkout@v4
+        with:
+          repository: theos/theos
+          path: ${{ github.workspace }}/theos
+          submodules: recursive
 
       - name: Install build tools
         run: |
@@ -134,10 +134,10 @@ jobs:
               -o /usr/local/bin/ipapatch
           sudo chmod +x /usr/local/bin/ipapatch
 
-#      - name: Build zxPluginsInject.dylib
-#        run: |
-#          chmod +x Tools/build-zxpi.sh
-#          Tools/build-zxpi.sh
+      - name: Build zxPluginsInject.dylib
+        run: |
+          chmod +x Tools/build-zxpi.sh
+          Tools/build-zxpi.sh
 
       - name: Inject deb into IPA (cyan)
         run: |
@@ -158,7 +158,7 @@ jobs:
             EEVEE_VERSION=$(grep -E '^Version:' "$DEB_EXTRACT/DEBIAN/control" | awk '{print $2}')
           fi
           
-          OUT="Outputs/IPAS/${{ env.FILE_PREFIX }}-${SPOT_VERSION}-ESR-${EEVEE_VERSION}.ipa"
+          OUT="Outputs/IPAS/${FILE_PREFIX}-${SPOT_VERSION}-ESR-${EEVEE_VERSION}.ipa"
           
           echo "SPOTIFY_VERSION=$SPOT_VERSION" >> $GITHUB_ENV
           echo "TWEAK_VERSION=$EEVEE_VERSION" >> $GITHUB_ENV
@@ -227,6 +227,7 @@ jobs:
           name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ steps.time.outputs.timestamp }}
           files: |
             Outputs/IPAS/*.ipa
+            packages/zxPluginsInject.dylib
 
       - name: Upload to EeveeIPA Releases
         if: ${{ inputs.upload_to_alt_repo == true }}
