@@ -87,14 +87,33 @@ jobs:
             echo "::error::Not a valid .deb: $file_type"; exit 1
           fi
 
-      - name: Pull latest .deb from Upstream Releases
+      - name: Download tweak artifact if no URL provided
         if: ${{ inputs.tweak_url == '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          github_token: ${{ secrets.PAT }} 
+          repo: jaydenjcpy/EeveeSpotifyReincarnated
+          workflow_search: true
+          workflow_conclusion: success
+          name: com\.eevee\.spotify_.*_iphoneos-arm64\.deb
+          name_is_regexp: true
+          path: ${{ github.workspace }}/artifact-temp
+
+      - name: Prepare downloaded artifact
+        if: ${{ inputs.tweak_url == '' }}
         run: |
-          echo "no url provided! grabbing the latest release deb from the main repo... >w<"
-          gh release download --repo jaydenjcpy/EeveeSpotifyReincarnated --pattern "*.deb" --dir ${{ github.workspace }}
-          mv ${{ github.workspace }}/*.deb ${{ github.workspace }}/eevee.deb
+          rm -rf ${{ github.workspace }}/eevee.deb
+          
+          DEB_FILE=$(find ${{ github.workspace }}/artifact-temp -type f -name "*.deb" | head -n 1)
+          
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::could not find any .deb file in the downloaded artifact! ;w;"
+            ls -R ${{ github.workspace }}/artifact-temp
+            exit 1
+          fi
+          
+          mv "$DEB_FILE" ${{ github.workspace }}/eevee.deb
+          rm -rf ${{ github.workspace }}/artifact-temp
 
       - name: Setup Theos (only needed for zxPluginsInject build)
         uses: actions/checkout@v4
