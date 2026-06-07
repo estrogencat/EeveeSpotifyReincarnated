@@ -4,32 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "url to a decrypted spotify ipa"
+        description: "URL to decrypted IPA"
         default: ""
         required: true
         type: string
       tweak_url:
-        description: "url to a prebuilt eeveespotify .deb"
+        description: "URL to .deb"
         default: ""
         required: false
         type: string
       use_alt_name:
-        description: "testflight?"
+        description: "Append TestFlight prefix?"
         default: false
         required: true
         type: boolean
       upload_to_alt_repo:
-        description: "multi upload"
+        description: "Multi Upload"
         default: false
         required: true
         type: boolean
       upload_to_telegram:
-        description: "upload to telegram channel"
+        description: "Upload to Telegram channel"
         default: false
         required: true
         type: boolean
       changelog_changer:
-        description: "chuds. all of u."
+        description: "put the changelog here, this only edits the telegram changelog"
         default: ""
         required: false
         type: string
