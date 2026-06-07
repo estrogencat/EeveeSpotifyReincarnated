@@ -11,7 +11,7 @@ on:
       tweak_url:
         description: "url to a prebuilt eeveespotify .deb"
         default: ""
-        required: true
+        required: false
         type: string
       use_alt_name:
         description: "testflight?"
@@ -78,13 +78,23 @@ jobs:
             echo "::error::Not a valid IPA: $file_type"; exit 1
           fi
 
-      - name: Download .deb
+      - name: Download .deb from URL
+        if: ${{ inputs.tweak_url != '' }}
         run: |
           wget "${{ inputs.tweak_url }}" --no-verbose -O ${{ github.workspace }}/eevee.deb
           file_type=$(file --mime-type -b ${{ github.workspace }}/eevee.deb)
           if [[ "$file_type" != "application/vnd.debian.binary-package" ]]; then
             echo "::error::Not a valid .deb: $file_type"; exit 1
           fi
+
+      - name: Pull latest .deb from Upstream Releases
+        if: ${{ inputs.tweak_url == '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "no url provided! grabbing the latest release deb from the main repo... >w<"
+          gh release download --repo jaydenjcpy/EeveeSpotifyReincarnated --pattern "*.deb" --dir ${{ github.workspace }}
+          mv ${{ github.workspace }}/*.deb ${{ github.workspace }}/eevee.deb
 
       - name: Setup Theos (only needed for zxPluginsInject build)
         uses: actions/checkout@v4
