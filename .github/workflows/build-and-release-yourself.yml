@@ -52,6 +52,9 @@ jobs:
         with:
           xcode-version: '16.2.0'
 
+      - name: Hide Sensitive Inputs
+        uses: levibostian/action-hide-sensitive-inputs@v1
+
       - name: get current time for build date
         id: time
         run: |
