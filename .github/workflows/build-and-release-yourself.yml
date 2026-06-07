@@ -65,13 +65,9 @@ jobs:
         run: |
           echo "timestamp=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
           
-      - name: set filename prefix
+- name: set filename prefix
         run: |
-          if [ "${{ inputs.use_alt_name }}" = "true" ]; then
-            echo "FILE_PREFIX=TestFlight-ES" >> $GITHUB_ENV
-          else
-            echo "FILE_PREFIX=EeveeSpotify" >> $GITHUB_ENV
-          fi
+          echo "FILE_PREFIX=${{ inputs.use_alt_name == true && 'TestFlight-ES' || 'EeveeSpotify' }}" >> $GITHUB_ENV
 
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
@@ -120,12 +116,12 @@ jobs:
           mv "$DEB_FILE" ${{ github.workspace }}/eevee.deb
           rm -rf ${{ github.workspace }}/artifact-temp
 
-      - name: Setup Theos (only needed for zxPluginsInject build)
-        uses: actions/checkout@v4
-        with:
-          repository: theos/theos
-          path: ${{ github.workspace }}/theos
-          submodules: recursive
+#      - name: Setup Theos (only needed for zxPluginsInject build)
+#        uses: actions/checkout@v4
+#        with:
+#          repository: theos/theos
+#          path: ${{ github.workspace }}/theos
+#          submodules: recursive
 
       - name: Install build tools
         run: |
@@ -138,10 +134,10 @@ jobs:
               -o /usr/local/bin/ipapatch
           sudo chmod +x /usr/local/bin/ipapatch
 
-      - name: Build zxPluginsInject.dylib
-        run: |
-          chmod +x Tools/build-zxpi.sh
-          Tools/build-zxpi.sh
+#      - name: Build zxPluginsInject.dylib
+#        run: |
+#          chmod +x Tools/build-zxpi.sh
+#          Tools/build-zxpi.sh
 
       - name: Inject deb into IPA (cyan)
         run: |
