@@ -285,7 +285,7 @@ jobs:
           PATCHED_IPA: "${{ env.PATCHED_IPA }}"
           FILE_PREFIX: "${{ env.FILE_PREFIX }}"
           CAPTION: |
-            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}
+            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas
         run: |
           cat << 'EOF' > upload.py
           import os, asyncio, re
