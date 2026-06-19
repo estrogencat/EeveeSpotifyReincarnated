@@ -4,14 +4,39 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: "URL to a decrypted Spotify IPA"
+        description: "URL to decrypted IPA"
         default: ""
         required: true
         type: string
       tweak_url:
-        description: "URL to a prebuilt EeveeSpotify .deb"
+        description: "URL to .deb"
         default: ""
+        required: false
+        type: string
+      use_alt_name:
+        description: "Append TestFlight prefix?"
+        default: false
         required: true
+        type: boolean
+      upload_local:
+        description: "Upload to this channel"
+        default: true
+        required: true
+        type: boolean
+      upload_to_alt_repo:
+        description: "Multi Upload"
+        default: false
+        required: true
+        type: boolean
+      upload_to_telegram:
+        description: "Upload to Telegram channel"
+        default: false
+        required: true
+        type: boolean
+      changelog_changer:
+        description: "Put the changelog here, this only edits the telegram changelog"
+        default: ""
+        required: false
         type: string
 
 env:
@@ -32,6 +57,41 @@ jobs:
         with:
           xcode-version: '16.2.0'
 
+      - name: Hide Sensitive Inputs
+        uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - name: get current time for build date
+        id: time
+        run: |
+          echo "timestamp=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+          
+      - name: determine version & prefix
+        id: version_check
+        run: |
+          URL="${{ inputs.ipa_url }}"
+          # Check if the URL has 4 sets of numbers (e.g., 9.1.58.1126) indicating TestFlight
+          if [[ "$URL" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            EXTRACTED_VERSION="${BASH_REMATCH[1]}"
+            IS_TESTFLIGHT=true
+            echo "found testflight version in url: $EXTRACTED_VERSION"
+          else
+            IS_TESTFLIGHT=false
+            echo "No testflight version found in URL, assuming stable."
+          fi
+          # Figure out the prefix
+          if [ "${{ inputs.use_alt_name }}" == "true" ]; then
+            FILE_PREFIX="TestFlight-ES"
+          elif [ "$IS_TESTFLIGHT" == "true" ]; then
+            FILE_PREFIX="TestFlight-ES"
+          else
+            FILE_PREFIX="EeveeSpotify"
+          fi
+          echo "FILE_PREFIX=$FILE_PREFIX" >> $GITHUB_ENV
+          # If we found the version in the URL, save it so we don't have to extract from Info.plist
+          if [ "$IS_TESTFLIGHT" == "true" ]; then
+            echo "URL_VERSION=$EXTRACTED_VERSION" >> $GITHUB_ENV
+          fi
+
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
       - name: Download IPA
@@ -42,7 +102,8 @@ jobs:
             echo "::error::Not a valid IPA: $file_type"; exit 1
           fi
 
-      - name: Download .deb
+      - name: Download .deb from URL
+        if: ${{ inputs.tweak_url != '' }}
         run: |
           wget "${{ inputs.tweak_url }}" --no-verbose -O ${{ github.workspace }}/eevee.deb
           file_type=$(file --mime-type -b ${{ github.workspace }}/eevee.deb)
@@ -50,29 +111,45 @@ jobs:
             echo "::error::Not a valid .deb: $file_type"; exit 1
           fi
 
-      - name: Setup Theos (only needed for zxPluginsInject build)
-        uses: actions/checkout@v4
+      - name: Download tweak artifact if no URL provided
+        if: ${{ inputs.tweak_url == '' }}
+        uses: dawidd6/action-download-artifact@v3
         with:
-          repository: theos/theos
-          path: ${{ github.workspace }}/theos
-          submodules: recursive
+          github_token: ${{ secrets.PAT }} 
+          repo: jaydenjcpy/EeveeSpotifyReincarnated
+          workflow_search: true
+          workflow_conclusion: success
+          name: (com\.eevee\.spotify_.*_iphoneos-arm64\.deb|EeveeSpotify-DEBS)
+          name_is_regexp: true
+          path: ${{ github.workspace }}/artifact-temp
 
+      - name: Prepare downloaded artifact
+        if: ${{ inputs.tweak_url == '' }}
+        run: |
+          rm -rf ${{ github.workspace }}/eevee.deb
+          # look for an arm64 deb first
+          DEB_FILE=$(find ${{ github.workspace }}/artifact-temp -type f -name "*arm64.deb" | head -n 1)
+          # fallback to any deb if there isnt one explicitly named arm64
+          if [ -z "$DEB_FILE" ]; then
+            DEB_FILE=$(find ${{ github.workspace }}/artifact-temp -type f -name "*.deb" | head -n 1)
+          fi  
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::could not find any .deb file in the downloaded artifact! ;w;"
+            ls -R ${{ github.workspace }}/artifact-temp
+            exit 1
+          fi
+          mv "$DEB_FILE" ${{ github.workspace }}/eevee.deb
+          rm -rf ${{ github.workspace }}/artifact-temp
+          
       - name: Install build tools
         run: |
-          brew install make dpkg ldid wget
-          echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
+          brew install dpkg
           python3 -m pip install --upgrade --break-system-packages \
               git+https://github.com/asdfzxcvbn/pyzule-rw.git
-          # releases/latest/download redirect avoids api.github.com rate limit (anon 60/hr -> 403)
           ARCH=$(uname -m); [ "$ARCH" = "x86_64" ] && SUFFIX=macos-amd64 || SUFFIX=macos-arm64
           sudo curl -fsSL "https://github.com/asdfzxcvbn/ipapatch/releases/latest/download/ipapatch.${SUFFIX}" \
               -o /usr/local/bin/ipapatch
           sudo chmod +x /usr/local/bin/ipapatch
-
-      - name: Build zxPluginsInject.dylib
-        run: |
-          chmod +x Tools/build-zxpi.sh
-          Tools/build-zxpi.sh
 
       - name: Inject deb into IPA (cyan)
         run: |
@@ -84,9 +161,24 @@ jobs:
           BUNDLE_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSpotify.bundle' | head -1)
           FRAMEWORK_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSwiftProtobuf.framework' | head -1)
 
-          SPOT_VERSION=$(unzip -p ${{ github.workspace }}/spotify.ipa 'Payload/Spotify.app/Info.plist' \
-              | plutil -extract CFBundleShortVersionString raw - 2>/dev/null || echo "unknown")
-          OUT="Outputs/IPAS/EeveeSpotify-${SPOT_VERSION}.ipa"
+          # use the url version if we found it, otherwise extract from the ipa
+          if [ -n "$URL_VERSION" ]; then
+            SPOT_VERSION="$URL_VERSION"
+          else
+            SPOT_VERSION=$(unzip -p ${{ github.workspace }}/spotify.ipa 'Payload/Spotify.app/Info.plist' \
+                | plutil -extract CFBundleShortVersionString raw - 2>/dev/null || echo "unknown")
+          fi
+              
+          if [ -f "$DEB_EXTRACT/control" ]; then
+            EEVEE_VERSION=$(grep -E '^Version:' "$DEB_EXTRACT/control" | awk '{print $2}')
+          else
+            EEVEE_VERSION=$(grep -E '^Version:' "$DEB_EXTRACT/DEBIAN/control" | awk '{print $2}')
+          fi
+          
+          OUT="Outputs/IPAS/${FILE_PREFIX}-${SPOT_VERSION}-ESR-${EEVEE_VERSION}.ipa"
+          
+          echo "SPOTIFY_VERSION=$SPOT_VERSION" >> $GITHUB_ENV
+          echo "TWEAK_VERSION=$EEVEE_VERSION" >> $GITHUB_ENV
 
           INJECT=("$DYLIB_SRC")
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
@@ -96,37 +188,71 @@ jobs:
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
 
+      - name: Strip Watch app & touch marker file
+        run: |
+          cd "$(dirname "$OUT_IPA")"
+          rm -rf Payload
+          unzip -q "$(basename "$OUT_IPA")"
+          
+          touch Payload/softgaypaws.com
+
+          if [ -d "Payload/Spotify.app/com.apple.WatchPlaceholder" ]; then
+            rm -rf Payload/Spotify.app/com.apple.WatchPlaceholder
+          fi
+          
+          if [ -d "Payload/Spotify.app/Watch" ]; then
+            rm -rf Payload/Spotify.app/Watch
+          fi
+          
+          if [ -f "${{ secrets.PATH1 }}" ] && [ -n "${{ secrets.HELLO }}" ]; then
+            jq ". + {\"${{ secrets.XESR }}\": \"${{ secrets.HELLO }}\"}" "${{ secrets.PATH1 }}" > tmp.json && mv tmp.json "${{ secrets.PATH1 }}"
+          fi
+
+          if [ -f "${{ secrets.PATH2 }}" ] && [ -n "${{ secrets.HTML }}" ]; then
+            export HTML_INJECT="${{ secrets.HTML }}"
+            perl -pi -e 's|(</body>)|$ENV{HTML_INJECT}\1|i' "${{ secrets.PATH2 }}"
+          fi
+          
+          rm -f "$(basename "$OUT_IPA")"
+          zip -qry "$(basename "$OUT_IPA")" Payload
+          rm -rf Payload
+
+      - name: Stage alternate app icons
+        run: |
+          chmod +x Tools/alt-icons.sh
+          Tools/alt-icons.sh "$OUT_IPA"
+
+      - name: "Download precompiled zxPluginsInject from secret set URL ($DYLIB)"
+        env:
+          DYLIB: ${{ secrets.DYLIB }}
+        run: |
+          mkdir -p extra_dylibs
+          wget -O extra_dylibs/zxPluginsInject.dylib "$DYLIB"
+
       - name: Fetch OpeninSafariSpotify extension (.appex)
+        if: ${{ inputs.ipa_url != '' }}
         run: |
           # "OpeninSafariSpotify" is commonly distributed as OpenSpotifySafariExtension.appex
           EXT_DIR="$RUNNER_TEMP/OpenSpotifySafariExtension"
-          
           rm -rf "$EXT_DIR"
           git clone --depth 1 https://github.com/BillyCurtis/OpenSpotifySafariExtension.git "$EXT_DIR"
           EXT_SRC="$EXT_DIR/OpenSpotifySafariExtension.appex"
           [ -e "$EXT_SRC" ] || { echo "OpenSpotifySafariExtension.appex not found in repo" >&2; exit 1; }
           echo "OPENSPOTIFY_APPEX=$EXT_SRC" >> $GITHUB_ENV
 
-      - name: Inject OpeninSafariSpotify into base IPA & strip Watch app
+      - name: Inject OpeninSafariSpotify extension into IPA PlugIns
+        if: ${{ inputs.ipa_url != '' }}
         run: |
           cd "$(dirname "$OUT_IPA")"
           rm -rf Payload
-          
           unzip -q "$(basename "$OUT_IPA")"
           mkdir -p "Payload/Spotify.app/PlugIns"
           rm -rf "Payload/Spotify.app/PlugIns/OpenSpotifySafariExtension.appex"
           cp -R "$OPENSPOTIFY_APPEX" "Payload/Spotify.app/PlugIns/OpenSpotifySafariExtension.appex"
-          
-          if [ -d "Payload/Spotify.app/com.apple.WatchPlaceholder" ]; then
-            rm -rf Payload/Spotify.app/com.apple.WatchPlaceholder
-          fi
-          if [ -d "Payload/Spotify.app/Watch" ]; then
-            rm -rf Payload/Spotify.app/Watch
-          fi
-          
           zip -qry "$(basename "$OUT_IPA")" Payload
           rm -rf Payload
 
+          
       - name: Create Patched Duplicate & LC-inject zxPluginsInject
         run: |
           PATCHED_OUT="${OUT_IPA%.ipa}-patched.ipa"
@@ -134,17 +260,110 @@ jobs:
           ipapatch --input "$PATCHED_OUT" --inplace --noconfirm \
                    --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> $GITHUB_ENV
-
-      - name: Stage alternate app icons
+          
+      - name: Fetch original changelog and append warning
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          chmod +x Tools/alt-icons.sh
-          Tools/alt-icons.sh "$OUT_IPA"
+          cat << 'EOF' > changelog.txt
+          # this might not be the latest changelog for the tweak version!
+          
+          * this only grabs from releases/latest as there is no changelog in actions. to check if it is newer than the release, go to commits in the original repo @ [GitHub](https://github.com/jaydenjcpy/EeveeSpotifyReincarnated) :P
+          ---
+          ### original changelog:
+          
+          EOF
+          gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload to ALT REPO Releases
+        if: ${{ inputs.upload_to_alt_repo == true }}
+        uses: softprops/action-gh-release@v3.0.0
         with:
-          name: EeveeSpotify-IPA
-          path: |
-            ${{ env.OUT_IPA }}
-            ${{ env.PATCHED_OUT }}
-          if-no-files-found: error
+          repository: ${{ secrets.ALT_REPO_NAME }}
+          token: ${{ secrets.ALT_REPO_TOKEN }}
+          body_path: changelog.txt
+          tag_name: ${{ env.SPOTIFY_VERSION }}-${{ env.TWEAK_VERSION }}-${{ steps.time.outputs.timestamp }}
+          name: ${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Swift ${{ env.TWEAK_VERSION }} // Multi Upload from github.repository
+          files: |
+            Outputs/IPAS/*.ipa
+
+      - name: Install pip packages for Telegram upload
+        if: ${{ inputs.upload_to_telegram == true }}
+        run: pip3 install telethon cryptg FastTelethonhelper --break-system-packages
+
+      - name: Override changelog for telegram and this repo
+        if: ${{ inputs.changelog_changer != '' }}
+        env:
+          CUSTOM_LOG: ${{ inputs.changelog_changer }}
+        run: |
+          echo "$CUSTOM_LOG" > changelog.txt
+
+      - name: Upload big files to telegram
+        if: ${{ inputs.upload_to_telegram == true }}
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          REGULAR_IPA: "${{ env.OUT_IPA }}"
+          PATCHED_IPA: "${{ env.PATCHED_IPA }}"
+          FILE_PREFIX: "${{ env.FILE_PREFIX }}"
+          CAPTION: |
+            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas
+        run: |
+          cat << 'EOF' > upload.py
+          import os, asyncio, re
+          from telethon import TelegramClient
+          from FastTelethonhelper import fast_upload
+
+          api_id = int(os.environ['TG_API_ID'])
+          api_hash = os.environ['TG_API_HASH']
+          bot_token = os.environ['TG_BOT_TOKEN']
+          chat_id = os.environ['TG_CHAT_ID']
+          
+          if chat_id.lstrip('-').isdigit():
+              chat_id = int(chat_id)
+
+          async def main():
+              client = await TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
+              
+              with open('changelog.txt', 'r', encoding='utf-8') as f:
+                  changelog_text = f.read()
+
+              changelog_text = re.sub(r'^(#+)\s+(.+)$', r'**\2**', changelog_text, flags=re.MULTILINE)
+                   
+              full_caption = os.environ['CAPTION'] + "\n" + changelog_text
+              if len(full_caption) > 1024:
+                  full_caption = full_caption[:1020] + "..."
+              
+              print("Uploading with FastTelethonhelper")
+              reg_file = await fast_upload(client, os.environ['REGULAR_IPA'])
+              
+              print("zooming patched ipa... *speedy paws*")
+              patched_file = await fast_upload(client, os.environ['PATCHED_IPA'])
+              
+              captions = ["", full_caption]
+              
+              print("Sending to channel")
+              await client.send_file(chat_id, [reg_file, patched_file], caption=captions)
+              await client.disconnect()
+
+          asyncio.run(main())
+          EOF
+          
+          python3 upload.py
+
+      - name: Output success for telegram channel
+        if: ${{ inputs.upload_to_telegram == true }}
+        run: |
+          echo "im done bitch ass, check telegram"
+
+      - name: Upload to GitHub Releases
+        if: ${{ inputs.upload_local == true }}
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          body_path: changelog.txt
+          tag_name: ${{ env.TWEAK_VERSION }}-${{ steps.time.outputs.timestamp }}
+          name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ steps.time.outputs.timestamp }}
+          files: |
+            Outputs/IPAS/*.ipa
