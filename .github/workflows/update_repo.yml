@@ -1,4 +1,4 @@
-name: Update AltStore repository
+name: Update AltStore repositorya
 
 on:
   repository_dispatch:
