@@ -1,4 +1,4 @@
-name: Update AltStore repositorya
+name: Update AltStore repository
 
 on:
   repository_dispatch:
@@ -20,14 +20,15 @@ jobs:
           fetch-depth: 0
           ref: Master
 
-      - name: install jq
-        run: sudo apt-get install jq -y
+      - name: install dependencies
+        run: sudo apt-get install -y jq unzip libplist-utils
 
       - name: rebuild app-repo.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. empty or create the versions arrays so it starts clean
+          # 1. backup the current json to check for cached versions, then start fresh
+          cp app-repo.json old-repo.json
           jq '.apps[].versions = []' app-repo.json > tmp.json && mv tmp.json app-repo.json
 
           # 2. fetch history from EeveeIPA
@@ -67,9 +68,33 @@ jobs:
             fi
 
             if [[ "$APP_INDEX" -ne -1 ]]; then
+              # grab cached build version so we don't download huge files pointlessly
+              BUILD_VER=$(jq -r --arg ver "$VERSION" --argjson idx "$APP_INDEX" '.apps[$idx].versions[]? | select(.version == $ver) | .buildVersion // empty' old-repo.json)
+
+              if [ -z "$BUILD_VER" ] || [ "$BUILD_VER" == "null" ]; then
+                echo "downloading $NAME to extract buildVersion..."
+                wget -q "$URL" -O temp.ipa
+                unzip -p temp.ipa "Payload/*.app/Info.plist" > temp_info.plist || true
+                
+                BUILD_VER=""
+                if [ -s temp_info.plist ]; then
+                  # convert binary plist to xml
+                  plistutil -i temp_info.plist -o temp_info.xml || cp temp_info.plist temp_info.xml
+                  BUILD_VER=$(grep -A1 '<key>CFBundleVersion</key>' temp_info.xml | grep '<string>' | sed -E 's/.*<string>(.*)<\/string>.*/\1/' | head -n 1)
+                fi
+                
+                rm -f temp.ipa temp_info.plist temp_info.xml
+              fi
+
               # replace check! updates the version if it exists, otherwise appends it
-              jq --arg ver "$VERSION" --arg date "$DATE" --arg url "$URL" --argjson size "$SIZE" --argjson idx "$APP_INDEX" \
-                '.apps[$idx].versions |= if any(.[]; .version == $ver) then map(if .version == $ver then {"version": $ver, "date": $date, "size": $size, "downloadURL": $url} else . end) else . + [{"version": $ver, "date": $date, "size": $size, "downloadURL": $url}] end' \
+              jq --arg ver "$VERSION" \
+                 --arg date "$DATE" \
+                 --arg url "$URL" \
+                 --argjson size "$SIZE" \
+                 --argjson idx "$APP_INDEX" \
+                 --arg build "$BUILD_VER" \
+                 --arg minOS "16.0" \
+                '.apps[$idx].versions |= if any(.[]; .version == $ver) then map(if .version == $ver then {"version": $ver, "date": $date, "size": $size, "downloadURL": $url, "buildVersion": (if $build == "" then null else $build end), "minOSVersion": $minOS} else . end) else . + [{"version": $ver, "date": $date, "size": $size, "downloadURL": $url, "buildVersion": (if $build == "" then null else $build end), "minOSVersion": $minOS}] end' \
                 app-repo.json > tmp.json && mv tmp.json app-repo.json
             fi
           done
@@ -84,6 +109,8 @@ jobs:
               .size = .versions[0].size
             else . end
           )' app-repo.json > tmp.json && mv tmp.json app-repo.json
+          
+          rm -f old-repo.json
 
       - name: commit updated app-repo.json
         run: |
