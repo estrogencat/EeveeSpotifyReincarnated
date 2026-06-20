@@ -44,47 +44,42 @@
         {
           "version": "9.1.60.383",
           "date": "2026-06-13T21:34:29Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa",
           "size": 122190777,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa",
+          "buildVersion": "9160383",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.58.1126",
           "date": "2026-06-11T15:35:41Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4-patched.ipa",
           "size": 121322108,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4-patched.ipa",
+          "buildVersion": "91581126",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.58",
           "date": "2026-06-11T12:47:03Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4-patched.ipa",
           "size": 121257615,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4-patched.ipa",
+          "buildVersion": "9158",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.54",
           "date": "2026-06-07T06:54:26Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4-patched.ipa",
           "size": 119556728,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4-patched.ipa",
+          "buildVersion": "9154",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.48",
           "date": "2026-06-07T04:40:13Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4-patched.ipa",
           "size": 119019322,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4-patched.ipa",
+          "buildVersion": "9148",
+          "minOSVersion": "16.0"
         }
       ],
       "appPermissions": {
@@ -108,7 +103,11 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {}
+      "patreon": {},
+      "version": "9.1.60.383",
+      "versionDate": "2026-06-13T21:34:29Z",
+      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa",
+      "size": 122190777
     },
     {
       "name": "EeveeSpotify (TestFlight)",
@@ -144,47 +143,42 @@
         {
           "version": "9.1.60.383",
           "date": "2026-06-13T21:34:29Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa",
           "size": 115657219,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa",
+          "buildVersion": "9160383",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.58.1126",
           "date": "2026-06-11T15:35:41Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4.ipa",
           "size": 114815752,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4.ipa",
+          "buildVersion": "91581126",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.58",
           "date": "2026-06-11T12:47:03Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4.ipa",
           "size": 114751163,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4.ipa",
+          "buildVersion": "9158",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.54",
           "date": "2026-06-07T06:54:26Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4.ipa",
           "size": 113073007,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4.ipa",
+          "buildVersion": "9154",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.48",
           "date": "2026-06-07T04:40:13Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4.ipa",
           "size": 112621958,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4.ipa",
+          "buildVersion": "9148",
+          "minOSVersion": "16.0"
         }
       ],
       "appPermissions": {
@@ -208,7 +202,11 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {}
+      "patreon": {},
+      "version": "9.1.60.383",
+      "versionDate": "2026-06-13T21:34:29Z",
+      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa",
+      "size": 115657219
     },
     {
       "name": "EeveeSpotify (Stable Patched)",
@@ -242,31 +240,36 @@
       },
       "versions": [
         {
+          "version": "9.1.58",
+          "date": "2026-06-20T18:20:12Z",
+          "size": 123454398,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa",
+          "buildVersion": "9158",
+          "minOSVersion": "16.0"
+        },
+        {
           "version": "9.1.56",
           "date": "2026-06-18T10:46:26Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5-patched.ipa",
           "size": 121348566,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5-patched.ipa",
+          "buildVersion": "9156",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.50",
           "date": "2026-06-13T23:47:25Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4-patched.ipa",
           "size": 118905983,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4-patched.ipa",
+          "buildVersion": "9150",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.48",
           "date": "2026-06-11T14:15:52Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4-patched.ipa",
           "size": 119019047,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4-patched.ipa",
+          "buildVersion": "9148",
+          "minOSVersion": "16.0"
         }
       ],
       "appPermissions": {
@@ -290,7 +293,11 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {}
+      "patreon": {},
+      "version": "9.1.58",
+      "versionDate": "2026-06-20T18:20:12Z",
+      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa",
+      "size": 123454398
     },
     {
       "name": "EeveeSpotify (Stable)",
@@ -324,49 +331,52 @@
       },
       "versions": [
         {
+          "version": "9.1.58",
+          "date": "2026-06-20T18:20:12Z",
+          "size": 116943915,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa",
+          "buildVersion": "9158",
+          "minOSVersion": "16.0"
+        },
+        {
           "version": "9.1.56",
           "date": "2026-06-18T10:46:26Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5.ipa",
           "size": 114851012,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5.ipa",
+          "buildVersion": "9156",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.50",
           "date": "2026-06-13T23:47:25Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4.ipa",
           "size": 112489571,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4.ipa",
+          "buildVersion": "9150",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.48",
           "date": "2026-06-11T14:15:52Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4.ipa",
           "size": 112621681,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4.ipa",
+          "buildVersion": "9148",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.22",
           "date": "2026-02-13T13:41:28Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.22-new/JailbreakOnly.EeveeSpotify-9.1.22-Swift-6.5.3.ipa",
           "size": 99599686,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.22-new/JailbreakOnly.EeveeSpotify-9.1.22-Swift-6.5.3.ipa",
+          "buildVersion": "9122",
+          "minOSVersion": "16.0"
         },
         {
           "version": "9.1.12",
           "date": "2026-01-15T20:05:31Z",
-          "localizedDescription": "First AltStore release!",
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.12-new/EeveeSpotify-9.1.12-Swift-6.5.0.ipa",
           "size": 89697212,
-          "buildVersion": null,
-          "minOSVersion": null
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.12-new/EeveeSpotify-9.1.12-Swift-6.5.0.ipa",
+          "buildVersion": "9112",
+          "minOSVersion": "16.0"
         }
       ],
       "appPermissions": {
@@ -390,7 +400,11 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {}
+      "patreon": {},
+      "version": "9.1.58",
+      "versionDate": "2026-06-20T18:20:12Z",
+      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa",
+      "size": 116943915
     }
   ],
   "news": []
