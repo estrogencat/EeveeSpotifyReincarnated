@@ -104,13 +104,19 @@
       "developerName": "estrogencat",
       "iconURL": "https://files.catbox.moe/9fgova.JPG",
       "localizedDescription": "Patched stable spotify, use with paid cert",
-      "size": 123698126,
+      "size": 123454398,
       "subtitle": "Patched stable spotify, use with paid cert... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "tintColor": "1DB954",
-      "version": "9.1.60",
-      "versionDate": "2026-06-20T17:57:35Z",
+      "version": "9.1.58",
+      "versionDate": "2026-06-20T18:20:12Z",
       "versionDescription": "Left like this on purpose, too tired to see if it'll break when I remove this line.",
       "versions": [
+        {
+          "version": "9.1.58",
+          "date": "2026-06-20T18:20:12Z",
+          "size": 123454398,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa"
+        },
         {
           "version": "9.1.60",
           "date": "2026-06-20T17:57:35Z",
@@ -136,7 +142,7 @@
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4-patched.ipa"
         }
       ],
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60-6.6.5-2026-06-20-17-55-14/EeveeSpotify-9.1.60-ESR-6.6.5-patched.ipa"
+      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa"
     },
     {
       "name": "EeveeSpotify (Stable)",
@@ -144,13 +150,19 @@
       "developerName": "estrogencat",
       "iconURL": "https://files.catbox.moe/9fgova.JPG",
       "localizedDescription": "Stable spotify, use with altstore/sidestore.",
-      "size": 117146727,
+      "size": 116943915,
       "subtitle": "Stable spotify, use with altstore/sidestore... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "tintColor": "1DB954",
-      "version": "9.1.60",
-      "versionDate": "2026-06-20T17:57:35Z",
+      "version": "9.1.58",
+      "versionDate": "2026-06-20T18:20:12Z",
       "versionDescription": "Left like this on purpose, too tired to see if it'll break when I remove this line.",
       "versions": [
+        {
+          "version": "9.1.58",
+          "date": "2026-06-20T18:20:12Z",
+          "size": 116943915,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa"
+        },
         {
           "version": "9.1.60",
           "date": "2026-06-20T17:57:35Z",
@@ -188,7 +200,7 @@
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.12-new/EeveeSpotify-9.1.12-Swift-6.5.0.ipa"
         }
       ],
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60-6.6.5-2026-06-20-17-55-14/EeveeSpotify-9.1.60-ESR-6.6.5.ipa"
+      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa"
     }
   ],
   "userInfo": {}
