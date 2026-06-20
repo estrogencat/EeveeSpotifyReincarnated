@@ -13,7 +13,6 @@
     {
       "name": "EeveeSpotify (TestFlight Patched)",
       "bundleIdentifier": "com.spotify.client.tfp",
-      "marketplaceID": "",
       "developerName": "estrogencat",
       "subtitle": "Patched TestFlight spotify, use with paid cert... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "localizedDescription": "patched TestFlight spotify, use with paid cert",
@@ -107,7 +106,6 @@
     {
       "name": "EeveeSpotify (TestFlight)",
       "bundleIdentifier": "com.spotify.client.tf",
-      "marketplaceID": "",
       "developerName": "estrogencat",
       "subtitle": "TestFlight spotify, use with AltStore/SideStore... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "localizedDescription": "TestFlight spotify, use with altstore/sidestore.",
@@ -201,7 +199,6 @@
     {
       "name": "EeveeSpotify (Stable Patched)",
       "bundleIdentifier": "com.spotify.client.patched",
-      "marketplaceID": "",
       "developerName": "estrogencat",
       "subtitle": "Patched stable spotify, use with paid cert... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "localizedDescription": "Patched stable spotify, use with paid cert",
@@ -287,7 +284,6 @@
     {
       "name": "EeveeSpotify (Stable)",
       "bundleIdentifier": "com.spotify.client",
-      "marketplaceID": "",
       "developerName": "estrogencat",
       "subtitle": "Stable spotify, use with altstore/sidestore... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "localizedDescription": "Stable spotify, use with altstore/sidestore.",
