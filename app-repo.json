@@ -1,207 +1,397 @@
 {
   "name": "Hazel's EeveeSpotify Repository",
-  "identifier": "com.estrogencat.eeveespotify",
   "subtitle": "EeveeSpotify latest IPAs, repo json base from Jayden",
   "description": "EeveeSpotify updates provided by Hazel",
-  "iconURL": "https://files.catbox.moe/9fgova.JPG",
-  "sourceURL": "https://estrogencat.github.io/EeveeSpotifyReincarnated/app-repo.json",
+  "iconURL": "https://softgaypaws.com/assets/etc/eevee.jpg",
+  "website": "https://t.me/eeveespotify_hazel",
+  "tintColor": "#68d171",
+  "featuredApps": [
+    "com.spotify.client"
+  ],
+  "headerURL": "https://softgaypaws.com/assets/etc/f040a48d-35b5-4f8c-9d6b-51c5504c540d.jpg",
   "apps": [
     {
       "name": "EeveeSpotify (TestFlight Patched)",
       "bundleIdentifier": "com.spotify.client.tfp",
+      "marketplaceID": "",
       "developerName": "estrogencat",
-      "iconURL": "https://files.catbox.moe/9fgova.JPG",
-      "localizedDescription": "patched TestFlight spotify, use with paid cert",
-      "size": 122190777,
       "subtitle": "Patched TestFlight spotify, use with paid cert... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
-      "tintColor": "F472B6",
-      "version": "9.1.60.383",
-      "versionDate": "2026-06-13T21:34:29Z",
-      "versionDescription": "Left like this on purpose, too tired to see if it'll break when I remove this line.",
+      "localizedDescription": "patched TestFlight spotify, use with paid cert",
+      "iconURL": "https://softgaypaws.com/assets/etc/eevee.jpg",
+      "tintColor": "#f472b6",
+      "category": "other",
+      "screenshots": {
+        "iphone": [
+          "https://softgaypaws.com/assets/screenshots/IMG_1335.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1336.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1337.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1338.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1339.jpg",
+          "https://softgaypaws.com/assets/screenshots/IMG_1340.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1341.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1342.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1343.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1344.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1345.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1346.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1347.PNG"
+        ],
+        "ipad": [
+          "https://github.com/estrogencat/EeveeIPA/blob/swift/Files/placeholder.png?raw=true"
+        ]
+      },
       "versions": [
         {
           "version": "9.1.60.383",
           "date": "2026-06-13T21:34:29Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa",
           "size": 122190777,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.58.1126",
           "date": "2026-06-11T15:35:41Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4-patched.ipa",
           "size": 121322108,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.58",
           "date": "2026-06-11T12:47:03Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4-patched.ipa",
           "size": 121257615,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.54",
           "date": "2026-06-07T06:54:26Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4-patched.ipa",
           "size": 119556728,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.48",
           "date": "2026-06-07T04:40:13Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4-patched.ipa",
           "size": 119019322,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         }
       ],
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa"
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSAppleMusicUsageDescription": "This will let you play your imported music on Spotify.",
+          "NSBluetoothAlwaysUsageDescription": "This lets you unlock new ways of interacting with other devices compatible with Spotify via Bluetooth.",
+          "NSCalendarsUsageDescription": "This lets Spotify view and add events to your calendar.",
+          "NSCalendarsWriteOnlyAccessUsageDescription": "This lets Spotify add events to your calendar.",
+          "NSCameraUsageDescription": "This lets you use your camera to scan or upload images.",
+          "NSContactsUsageDescription": "This lets Spotify access calendars you may have shared with your contacts.",
+          "NSFaceIDUsageDescription": "This lets you set access restrictions using Face ID.",
+          "NSHealthShareUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSHealthUpdateUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSLocalNetworkUsageDescription": "This lets you listen on different devices. Spotify will also get access to local audio files.",
+          "NSLocationWhenInUseUsageDescription": "Your location is used to improve your recommendations and experience on Spotify.",
+          "NSMicrophoneUsageDescription": "This lets you control Spotify using your voice.",
+          "NSMotionUsageDescription": "We will use this to understand which audio motivates you most.",
+          "NSPhotoLibraryAddUsageDescription": "This lets you save images to your Photo Library.",
+          "NSPhotoLibraryUsageDescription": "This lets you select images from your Photo Library.",
+          "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
+        }
+      },
+      "patreon": {}
     },
     {
       "name": "EeveeSpotify (TestFlight)",
       "bundleIdentifier": "com.spotify.client.tf",
+      "marketplaceID": "",
       "developerName": "estrogencat",
-      "iconURL": "https://files.catbox.moe/9fgova.JPG",
-      "localizedDescription": "TestFlight spotify, use with altstore/sidestore.",
-      "size": 115657219,
       "subtitle": "TestFlight spotify, use with AltStore/SideStore... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
-      "tintColor": "F472B6",
-      "version": "9.1.60.383",
-      "versionDate": "2026-06-13T21:34:29Z",
-      "versionDescription": "Left like this on purpose, too tired to see if it'll break when I remove this line.",
+      "localizedDescription": "TestFlight spotify, use with altstore/sidestore.",
+      "iconURL": "https://softgaypaws.com/assets/etc/eevee.jpg",
+      "tintColor": "#F472B6",
+      "category": "other",
+      "screenshots": {
+        "iphone": [
+          "https://softgaypaws.com/assets/screenshots/IMG_1335.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1336.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1337.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1338.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1339.jpg",
+          "https://softgaypaws.com/assets/screenshots/IMG_1340.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1341.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1342.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1343.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1344.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1345.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1346.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1347.PNG"
+        ],
+        "ipad": [
+          "https://github.com/estrogencat/EeveeIPA/blob/swift/Files/placeholder.png?raw=true"
+        ]
+      },
       "versions": [
         {
           "version": "9.1.60.383",
           "date": "2026-06-13T21:34:29Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa",
           "size": 115657219,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.58.1126",
           "date": "2026-06-11T15:35:41Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4.ipa",
           "size": 114815752,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58.1126-6.6.4-2026-06-11-15-33-59/TestFlight-ES-9.1.58.1126-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.58",
           "date": "2026-06-11T12:47:03Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4.ipa",
           "size": 114751163,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.4-2026-06-11-12-45-14/TestFlight-ES-9.1.58-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.54",
           "date": "2026-06-07T06:54:26Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4.ipa",
           "size": 113073007,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.54-6.6.4-2026-06-07-06-51-57/TestFlight-ES-9.1.54-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.48",
           "date": "2026-06-07T04:40:13Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4.ipa",
           "size": 112621958,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-07-04-36-40/TestFlight-ES-9.1.48-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         }
       ],
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa"
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSAppleMusicUsageDescription": "This will let you play your imported music on Spotify.",
+          "NSBluetoothAlwaysUsageDescription": "This lets you unlock new ways of interacting with other devices compatible with Spotify via Bluetooth.",
+          "NSCalendarsUsageDescription": "This lets Spotify view and add events to your calendar.",
+          "NSCalendarsWriteOnlyAccessUsageDescription": "This lets Spotify add events to your calendar.",
+          "NSCameraUsageDescription": "This lets you use your camera to scan or upload images.",
+          "NSContactsUsageDescription": "This lets Spotify access calendars you may have shared with your contacts.",
+          "NSFaceIDUsageDescription": "This lets you set access restrictions using Face ID.",
+          "NSHealthShareUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSHealthUpdateUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSLocalNetworkUsageDescription": "This lets you listen on different devices. Spotify will also get access to local audio files.",
+          "NSLocationWhenInUseUsageDescription": "Your location is used to improve your recommendations and experience on Spotify.",
+          "NSMicrophoneUsageDescription": "This lets you control Spotify using your voice.",
+          "NSMotionUsageDescription": "We will use this to understand which audio motivates you most.",
+          "NSPhotoLibraryAddUsageDescription": "This lets you save images to your Photo Library.",
+          "NSPhotoLibraryUsageDescription": "This lets you select images from your Photo Library.",
+          "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
+        }
+      },
+      "patreon": {}
     },
     {
       "name": "EeveeSpotify (Stable Patched)",
       "bundleIdentifier": "com.spotify.client.patched",
+      "marketplaceID": "",
       "developerName": "estrogencat",
-      "iconURL": "https://files.catbox.moe/9fgova.JPG",
-      "localizedDescription": "Patched stable spotify, use with paid cert",
-      "size": 123454398,
       "subtitle": "Patched stable spotify, use with paid cert... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
-      "tintColor": "1DB954",
-      "version": "9.1.58",
-      "versionDate": "2026-06-20T18:20:12Z",
-      "versionDescription": "Left like this on purpose, too tired to see if it'll break when I remove this line.",
+      "localizedDescription": "Patched stable spotify, use with paid cert",
+      "iconURL": "https://softgaypaws.com/assets/etc/eevee.jpg",
+      "tintColor": "#04e154",
+      "category": "other",
+      "screenshots": {
+        "iphone": [
+          "https://softgaypaws.com/assets/screenshots/IMG_1335.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1336.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1337.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1338.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1339.jpg",
+          "https://softgaypaws.com/assets/screenshots/IMG_1340.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1341.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1342.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1343.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1344.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1345.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1346.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1347.PNG"
+        ],
+        "ipad": [
+          "https://github.com/estrogencat/EeveeIPA/blob/swift/Files/placeholder.png?raw=true"
+        ]
+      },
       "versions": [
-        {
-          "version": "9.1.58",
-          "date": "2026-06-20T18:20:12Z",
-          "size": 123454398,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa"
-        },
-        {
-          "version": "9.1.60",
-          "date": "2026-06-20T17:57:35Z",
-          "size": 123698126,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60-6.6.5-2026-06-20-17-55-14/EeveeSpotify-9.1.60-ESR-6.6.5-patched.ipa"
-        },
         {
           "version": "9.1.56",
           "date": "2026-06-18T10:46:26Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5-patched.ipa",
           "size": 121348566,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.50",
           "date": "2026-06-13T23:47:25Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4-patched.ipa",
           "size": 118905983,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.48",
           "date": "2026-06-11T14:15:52Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4-patched.ipa",
           "size": 119019047,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4-patched.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         }
       ],
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa"
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSAppleMusicUsageDescription": "This will let you play your imported music on Spotify.",
+          "NSBluetoothAlwaysUsageDescription": "This lets you unlock new ways of interacting with other devices compatible with Spotify via Bluetooth.",
+          "NSCalendarsUsageDescription": "This lets Spotify view and add events to your calendar.",
+          "NSCalendarsWriteOnlyAccessUsageDescription": "This lets Spotify add events to your calendar.",
+          "NSCameraUsageDescription": "This lets you use your camera to scan or upload images.",
+          "NSContactsUsageDescription": "This lets Spotify access calendars you may have shared with your contacts.",
+          "NSFaceIDUsageDescription": "This lets you set access restrictions using Face ID.",
+          "NSHealthShareUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSHealthUpdateUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSLocalNetworkUsageDescription": "This lets you listen on different devices. Spotify will also get access to local audio files.",
+          "NSLocationWhenInUseUsageDescription": "Your location is used to improve your recommendations and experience on Spotify.",
+          "NSMicrophoneUsageDescription": "This lets you control Spotify using your voice.",
+          "NSMotionUsageDescription": "We will use this to understand which audio motivates you most.",
+          "NSPhotoLibraryAddUsageDescription": "This lets you save images to your Photo Library.",
+          "NSPhotoLibraryUsageDescription": "This lets you select images from your Photo Library.",
+          "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
+        }
+      },
+      "patreon": {}
     },
     {
       "name": "EeveeSpotify (Stable)",
       "bundleIdentifier": "com.spotify.client",
+      "marketplaceID": "",
       "developerName": "estrogencat",
-      "iconURL": "https://files.catbox.moe/9fgova.JPG",
-      "localizedDescription": "Stable spotify, use with altstore/sidestore.",
-      "size": 116943915,
       "subtitle": "Stable spotify, use with altstore/sidestore... // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
-      "tintColor": "1DB954",
-      "version": "9.1.58",
-      "versionDate": "2026-06-20T18:20:12Z",
-      "versionDescription": "Left like this on purpose, too tired to see if it'll break when I remove this line.",
+      "localizedDescription": "Stable spotify, use with altstore/sidestore.",
+      "iconURL": "https://softgaypaws.com/assets/etc/eevee.jpg",
+      "tintColor": "#04e154",
+      "category": "other",
+      "screenshots": {
+        "iphone": [
+          "https://softgaypaws.com/assets/screenshots/IMG_1335.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1336.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1337.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1338.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1339.jpg",
+          "https://softgaypaws.com/assets/screenshots/IMG_1340.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1341.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1342.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1343.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1344.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1345.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1346.PNG",
+          "https://softgaypaws.com/assets/screenshots/IMG_1347.PNG"
+        ],
+        "ipad": [
+          "https://github.com/estrogencat/EeveeIPA/blob/swift/Files/placeholder.png?raw=true"
+        ]
+      },
       "versions": [
-        {
-          "version": "9.1.58",
-          "date": "2026-06-20T18:20:12Z",
-          "size": 116943915,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa"
-        },
-        {
-          "version": "9.1.60",
-          "date": "2026-06-20T17:57:35Z",
-          "size": 117146727,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60-6.6.5-2026-06-20-17-55-14/EeveeSpotify-9.1.60-ESR-6.6.5.ipa"
-        },
         {
           "version": "9.1.56",
           "date": "2026-06-18T10:46:26Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5.ipa",
           "size": 114851012,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.56-6.6.5-2026-06-18-10-44-30/EeveeSpotify-9.1.56-ESR-6.6.5.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.50",
           "date": "2026-06-13T23:47:25Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4.ipa",
           "size": 112489571,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.50-6.6.4-2026-06-13-23-45-51/EeveeSpotify-9.1.50-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.48",
           "date": "2026-06-11T14:15:52Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4.ipa",
           "size": 112621681,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.48-6.6.4-2026-06-11-14-13-50/EeveeSpotify-9.1.48-ESR-6.6.4.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.22",
           "date": "2026-02-13T13:41:28Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.22-new/JailbreakOnly.EeveeSpotify-9.1.22-Swift-6.5.3.ipa",
           "size": 99599686,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.22-new/JailbreakOnly.EeveeSpotify-9.1.22-Swift-6.5.3.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         },
         {
           "version": "9.1.12",
           "date": "2026-01-15T20:05:31Z",
+          "localizedDescription": "First AltStore release!",
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.12-new/EeveeSpotify-9.1.12-Swift-6.5.0.ipa",
           "size": 89697212,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.12-new/EeveeSpotify-9.1.12-Swift-6.5.0.ipa"
+          "buildVersion": null,
+          "minOSVersion": null
         }
       ],
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa"
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSAppleMusicUsageDescription": "This will let you play your imported music on Spotify.",
+          "NSBluetoothAlwaysUsageDescription": "This lets you unlock new ways of interacting with other devices compatible with Spotify via Bluetooth.",
+          "NSCalendarsUsageDescription": "This lets Spotify view and add events to your calendar.",
+          "NSCalendarsWriteOnlyAccessUsageDescription": "This lets Spotify add events to your calendar.",
+          "NSCameraUsageDescription": "This lets you use your camera to scan or upload images.",
+          "NSContactsUsageDescription": "This lets Spotify access calendars you may have shared with your contacts.",
+          "NSFaceIDUsageDescription": "This lets you set access restrictions using Face ID.",
+          "NSHealthShareUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSHealthUpdateUsageDescription": "Spotify will use HealthKit data to provide personalised audio recommendations for your workouts.",
+          "NSLocalNetworkUsageDescription": "This lets you listen on different devices. Spotify will also get access to local audio files.",
+          "NSLocationWhenInUseUsageDescription": "Your location is used to improve your recommendations and experience on Spotify.",
+          "NSMicrophoneUsageDescription": "This lets you control Spotify using your voice.",
+          "NSMotionUsageDescription": "We will use this to understand which audio motivates you most.",
+          "NSPhotoLibraryAddUsageDescription": "This lets you save images to your Photo Library.",
+          "NSPhotoLibraryUsageDescription": "This lets you select images from your Photo Library.",
+          "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
+        }
+      },
+      "patreon": {}
     }
   ],
-  "userInfo": {}
+  "news": []
 }
