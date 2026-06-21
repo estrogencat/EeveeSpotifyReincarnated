@@ -97,11 +97,6 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {},
-      "version": "9.1.60.383",
-      "versionDate": "2026-06-13T21:34:29Z",
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa",
-      "size": 122190777
     },
     {
       "name": "EeveeSpotify (TestFlight)",
@@ -190,11 +185,6 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {},
-      "version": "9.1.60.383",
-      "versionDate": "2026-06-13T21:34:29Z",
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa",
-      "size": 115657219
     },
     {
       "name": "EeveeSpotify (Stable Patched)",
@@ -275,11 +265,6 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {},
-      "version": "9.1.58",
-      "versionDate": "2026-06-20T18:20:12Z",
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5-patched.ipa",
-      "size": 123454398
     },
     {
       "name": "EeveeSpotify (Stable)",
@@ -376,11 +361,6 @@
           "NSUserTrackingUsageDescription": "Your data will be used to deliver personalized ads or content to you."
         }
       },
-      "patreon": {},
-      "version": "9.1.58",
-      "versionDate": "2026-06-20T18:20:12Z",
-      "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.58-6.6.5-2026-06-20-18-18-08/EeveeSpotify-9.1.58-ESR-6.6.5.ipa",
-      "size": 116943915
     }
   ],
   "news": []
