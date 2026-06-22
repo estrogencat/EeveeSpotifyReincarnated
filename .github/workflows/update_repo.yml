@@ -85,26 +85,34 @@ jobs:
             fi
  
             if [[ "$APP_INDEX" -ne -1 ]]; then
-              # calculate the fallback dot-stripped version first
+              # calculate the raw fallback dot-stripped version (e.g. 9160383)
               FALLBACK_VER="${VERSION//./}"
+              
+              # calculate the base version for loose matching!
+              # this grabs only the first 3 parts (major.minor.patch) and strips dots
+              # so 9.1.60.383 becomes 9.1.60 -> 9160
+              BASE_VER=$(echo "$VERSION" | cut -d. -f1-3 | tr -d '.')
               
               # grab the existing build version from our backup file (if it exists!)
               EXISTING_BUILD=$(jq -r --arg ver "$VERSION" --argjson idx "$APP_INDEX" '(.apps[$idx].versions // [])[] | select(.version == $ver) | .buildVersion' backup-repo.json | head -n 1)
               
               # ── intelligent build version assignment ──
               if [[ "$APP_INDEX" -le 1 ]]; then
-                if [[ -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$FALLBACK_VER"* ]]; then
-                  BUILD_VER="$PACKED_TESTFLIGHT"
-                elif [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
+                # check backup first! if it already has a perfect 9-digit code, keep it safe
+                if [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
                   BUILD_VER="$EXISTING_BUILD"
+                # if not (meaning it's a brand new release), check the packed file!
+                elif [[ -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$BASE_VER"* ]]; then
+                  BUILD_VER="$PACKED_TESTFLIGHT"
+                # otherwise, use the basic fallback
                 else
                   BUILD_VER="$FALLBACK_VER"
                 fi
               else
-                if [[ -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$FALLBACK_VER"* ]]; then
-                  BUILD_VER="$PACKED_STABLE"
-                elif [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
+                if [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
                   BUILD_VER="$EXISTING_BUILD"
+                elif [[ -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$BASE_VER"* ]]; then
+                  BUILD_VER="$PACKED_STABLE"
                 else
                   BUILD_VER="$FALLBACK_VER"
                 fi
