@@ -85,33 +85,45 @@ jobs:
             fi
  
             if [[ "$APP_INDEX" -ne -1 ]]; then
-              # calculate the raw fallback dot-stripped version (e.g. 9160383)
-              FALLBACK_VER="${VERSION//./}"
-              
-              # calculate the base version for loose matching!
-              # this grabs only the first 3 parts (major.minor.patch) and strips dots
-              # so 9.1.60.383 becomes 9.1.60 -> 9160
+              # calculate the base version for loose matching! (e.g. 9160)
               BASE_VER=$(echo "$VERSION" | cut -d. -f1-3 | tr -d '.')
+              
+              # ── Apple Math Generator! ──
+              # check if it is a 4-part version (like TestFlight 9.1.60.383)
+              if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                V1="${BASH_REMATCH[1]}"
+                V2="${BASH_REMATCH[2]}"
+                V3="${BASH_REMATCH[3]}"
+                V4="${BASH_REMATCH[4]}"
+                # this mathematically pads the 4th segment with zeros!
+                V4_PADDED=$(printf "%05d" "$V4")
+                FALLBACK_VER="${V1}${V2}${V3}${V4_PADDED}"
+                IS_4_PART=true
+              else
+                # standard fallback for 3-part versions (like Stable 9.1.58)
+                RAW_VER="${VERSION//./}"
+                # pad the right side with zeros to force exactly 9 digits!
+                PAD="${RAW_VER}000000000"
+                FALLBACK_VER="${PAD:0:9}"
+                IS_4_PART=false
+              fi
+              # ───────────────────────────
               
               # grab the existing build version from our backup file (if it exists!)
               EXISTING_BUILD=$(jq -r --arg ver "$VERSION" --argjson idx "$APP_INDEX" '(.apps[$idx].versions // [])[] | select(.version == $ver) | .buildVersion' backup-repo.json | head -n 1)
               
               # ── intelligent build version assignment ──
-              if [[ "$APP_INDEX" -le 1 ]]; then
-                # check backup first! if it already has a perfect 9-digit code, keep it safe
-                if [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
-                  BUILD_VER="$EXISTING_BUILD"
-                # if not (meaning it's a brand new release), check the packed file!
-                elif [[ -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$BASE_VER"* ]]; then
-                  BUILD_VER="$PACKED_TESTFLIGHT"
-                # otherwise, use the basic fallback
-                else
-                  BUILD_VER="$FALLBACK_VER"
-                fi
+              if [[ "$IS_4_PART" == true ]]; then
+                # we know the EXACT math for 4-part versions!
+                # this fixes ur corrupted backups and assigns the perfect 9-digit code every single time!
+                BUILD_VER="$FALLBACK_VER"
               else
+                # for 3-part versions (Stable), we can't do the math, so we rely on backups & build files!
                 if [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
                   BUILD_VER="$EXISTING_BUILD"
-                elif [[ -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$BASE_VER"* ]]; then
+                elif [[ "$APP_INDEX" -le 1 && -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$BASE_VER"* ]]; then
+                  BUILD_VER="$PACKED_TESTFLIGHT"
+                elif [[ "$APP_INDEX" -ge 2 && -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$BASE_VER"* ]]; then
                   BUILD_VER="$PACKED_STABLE"
                 else
                   BUILD_VER="$FALLBACK_VER"
