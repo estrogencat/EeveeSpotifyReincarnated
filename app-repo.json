@@ -1,7 +1,7 @@
 {
   "name": "Hazel's EeveeSpotify Repository",
   "subtitle": "EeveeSpotify latest IPAs, repo json base and tweak from Jayden",
-  "description": "EeveeSpotify updates provided by Hazel, ",
+  "description": "EeveeSpotifyReincarnated (ESR) is a modification that intercepts and dynamically alters Spotify's user data requests in real-time, tricking the application into granting you access to Premium features such as ad-free listening and unrestricted skipping. It also restores full track row visibility and liked tracks on artist pages, mirroring the genuine Premium UI experience.\n\nFurthermore, the tweak bypasses the platform's monthly lyrics restrictions by seamlessly integrating custom third-party providers, including Genius, LRCLIB, Musixmatch, and PetitLyrics, ensuring consistent access to both static and time-synced lyrics.\n\nPlease note that certain server-sided functionalities, specifically Very High audio quality, native playlist downloading, Spotify Jam, and Spotify Connect remote streaming, remain strictly unavailable as they fundamentally require server validation from a genuine subscription.\n\nOverall, EeveeSpotifyReincarnated is a comprehensive and stable tweak designed to significantly enhance your mobile audio experience. :3",
   "iconURL": "https://softgaypaws.com/assets/etc/eevee.jpg",
   "website": "https://t.me/eeveespotify_hazel",
   "tintColor": "#68d171",
