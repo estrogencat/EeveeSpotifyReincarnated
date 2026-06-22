@@ -1,52 +1,52 @@
 name: Update AltStore repository
-
+ 
 on:
   repository_dispatch:
     types: [pingpongmotherfucker]
   workflow_dispatch:
   schedule:
     - cron: '0 0/6 * * *'
-
+ 
 permissions:
   contents: write
-
+ 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+ 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: Master
-
+ 
       - name: install jq
         run: sudo apt-get install jq -y
-
+ 
       - name: rebuild app-repo.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # 1. empty or create the versions arrays so it starts clean
           jq '.apps[].versions = []' app-repo.json > tmp.json && mv tmp.json app-repo.json
-
+ 
           # 2. fetch history from EeveeIPA
           gh api "repos/estrogencat/EeveeIPA/releases?per_page=100" > releases.json
-
+ 
           # 3. extract assets and reverse so oldest is processed first!
           ASSETS=$(jq -r 'reverse | .[] | .published_at as $date | .assets[]? | "\($date)|\(.name)|\(.browser_download_url)|\(.size)"' releases.json)
-
+ 
           if [ -z "$ASSETS" ]; then
             echo "no assets found! skipping..."
             exit 0
           fi
-
+ 
           # 4. loop and sort
           echo "$ASSETS" | while IFS='|' read -r DATE NAME URL SIZE; do
             if [[ "$NAME" != *".ipa" ]]; then
               continue
             fi
-
+ 
             APP_INDEX=-1
             if [[ "$NAME" =~ TestFlight-ES-([0-9.]+) ]]; then
               VERSION="${BASH_REMATCH[1]}"
@@ -65,7 +65,7 @@ jobs:
             else
               continue
             fi
-
+ 
             if [[ "$APP_INDEX" -ne -1 ]]; then
               # strip dots from the version string to create the build version
               BUILD_VER="${VERSION//./}"
@@ -82,18 +82,17 @@ jobs:
                 app-repo.json > tmp.json && mv tmp.json app-repo.json
             fi
           done
-
-          # 5. reverse the final array to be newest-first and sync top-level metadata
+ 
+          # 5. strip top-level version metadata fields and reverse the versions array to be newest-first
+          jq '.apps[] |= del(.version, .versionDate, .downloadURL, .size)' \
+            app-repo.json > tmp.json && mv tmp.json app-repo.json
+ 
           jq '.apps |= map(
             if (.versions | length) > 0 then
-              .versions |= reverse |
-              .version = .versions[0].version |
-              .versionDate = .versions[0].date |
-              .downloadURL = .versions[0].downloadURL |
-              .size = .versions[0].size
+              .versions |= reverse
             else . end
           )' app-repo.json > tmp.json && mv tmp.json app-repo.json
-
+ 
       - name: commit updated app-repo.json
         run: |
           git config user.name "github-actions[bot]"
