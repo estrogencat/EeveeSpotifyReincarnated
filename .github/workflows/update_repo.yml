@@ -27,7 +27,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. empty or create the versions arrays so it starts clean
+          # 1. backup the repo to save existing 9-digit build numbers, then clear it!
+          cp app-repo.json backup-repo.json
           jq '.apps[].versions = []' app-repo.json > tmp.json && mv tmp.json app-repo.json
  
           # 2. fetch history from EeveeIPA
@@ -87,21 +88,28 @@ jobs:
               # calculate the fallback dot-stripped version first
               FALLBACK_VER="${VERSION//./}"
               
-              # ── loose match check! ──
+              # grab the existing build version from our backup file (if it exists!)
+              EXISTING_BUILD=$(jq -r --arg ver "$VERSION" --argjson idx "$APP_INDEX" '(.apps[$idx].versions // [])[] | select(.version == $ver) | .buildVersion' backup-repo.json | head -n 1)
+              
+              # ── intelligent build version assignment ──
               if [[ "$APP_INDEX" -le 1 ]]; then
                 if [[ -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$FALLBACK_VER"* ]]; then
                   BUILD_VER="$PACKED_TESTFLIGHT"
+                elif [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
+                  BUILD_VER="$EXISTING_BUILD"
                 else
                   BUILD_VER="$FALLBACK_VER"
                 fi
               else
                 if [[ -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$FALLBACK_VER"* ]]; then
                   BUILD_VER="$PACKED_STABLE"
+                elif [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
+                  BUILD_VER="$EXISTING_BUILD"
                 else
                   BUILD_VER="$FALLBACK_VER"
                 fi
               fi
-              # ────────────────────────
+              # ──────────────────────────────────────────
               
               # replace check! updates the version if it exists, otherwise appends it
               jq --arg ver "$VERSION" \
@@ -116,7 +124,9 @@ jobs:
             fi
           done
  
-          # 5. strip top-level version metadata fields and reverse the versions array to be newest-first
+          # 5. cleanup and format! reverse the versions array to be newest-first
+          rm backup-repo.json
+          
           jq '.apps[] |= del(.version, .versionDate, .downloadURL, .size)' \
             app-repo.json > tmp.json && mv tmp.json app-repo.json
  
