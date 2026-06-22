@@ -42,10 +42,6 @@ jobs:
           fi
 
           # ── read the real SpotifyVersionPacked values written by the build workflow ──
-          # build_testflight → TestFlight IPAs (APP_INDEX 0 and 1)
-          # build            → stable IPAs     (APP_INDEX 2 and 3)
-          # Each file holds the packed integer for the most recently built IPA in
-          # that category. If a file is missing we fall back to dots-stripping.
           if [[ -f "build_testflight" && -s "build_testflight" ]]; then
             PACKED_TESTFLIGHT=$(tr -d '[:space:]' < build_testflight)
           else
@@ -58,8 +54,8 @@ jobs:
             PACKED_STABLE=""
           fi
 
-          echo "build_testflight → ${PACKED_TESTFLIGHT:-<not found, will fall back>}"
-          echo "build            → ${PACKED_STABLE:-<not found, will fall back>}"
+          echo "build_testflight -> ${PACKED_TESTFLIGHT:-<not found, will fall back>}"
+          echo "build            -> ${PACKED_STABLE:-<not found, will fall back>}"
           # ─────────────────────────────────────────────────────────────────────
  
           # 4. loop and sort
@@ -88,16 +84,24 @@ jobs:
             fi
  
             if [[ "$APP_INDEX" -ne -1 ]]; then
-              # ── use SpotifyVersionPacked from the appropriate build version file ──
-              # APP_INDEX 0/1 = TestFlight → read build_testflight
-              # APP_INDEX 2/3 = stable     → read build
-              # Falls back to dots-stripped version string if the file isn't there yet.
+              # calculate the fallback dot-stripped version first
+              FALLBACK_VER="${VERSION//./}"
+              
+              # ── loose match check! ──
               if [[ "$APP_INDEX" -le 1 ]]; then
-                BUILD_VER="${PACKED_TESTFLIGHT:-${VERSION//./}}"
+                if [[ -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$FALLBACK_VER"* ]]; then
+                  BUILD_VER="$PACKED_TESTFLIGHT"
+                else
+                  BUILD_VER="$FALLBACK_VER"
+                fi
               else
-                BUILD_VER="${PACKED_STABLE:-${VERSION//./}}"
+                if [[ -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$FALLBACK_VER"* ]]; then
+                  BUILD_VER="$PACKED_STABLE"
+                else
+                  BUILD_VER="$FALLBACK_VER"
+                fi
               fi
-              # ──────────────────────────────────────────────────────────────────
+              # ────────────────────────
               
               # replace check! updates the version if it exists, otherwise appends it
               jq --arg ver "$VERSION" \
