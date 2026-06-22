@@ -110,6 +110,8 @@ private func loadCustomLyricsForTrackId(_ trackId: String) throws -> Lyrics {
         repository = MusixmatchLyricsRepository.shared
     case .petit:
         repository = petitLyricsRepository
+    case .spicylyrics:
+        repository = SpicyLyricsRepository.shared
     case .notReplaced:
         throw LyricsError.invalidSource
     }
@@ -216,6 +218,8 @@ private func loadCustomLyricsForCurrentTrack() throws -> Lyrics {
         repository = MusixmatchLyricsRepository.shared
     case .petit:
         repository = petitLyricsRepository
+    case .spicylyrics:
+        repository = SpicyLyricsRepository.shared
     case .notReplaced:
         throw LyricsError.invalidSource
     }
@@ -287,6 +291,83 @@ private func loadCustomLyricsForCurrentTrack() throws -> Lyrics {
     return lyrics
 }
 
+/// Extracts the Spotify track ID from a `/color-lyrics/v2/track/{trackId}` URL path.
+/// Returns nil if the path doesn't match the expected format.
+func extractTrackId(from path: String) -> String? {
+    guard let range = path.range(of: #"/track/([a-zA-Z0-9]+)"#, options: .regularExpression) else {
+        return nil
+    }
+    let trackId = String(path[range].split(separator: "/").last ?? "")
+    return trackId.isEmpty ? nil : trackId
+}
+
+// MARK: - Lyrics prefetch
+// Holds the result of the most recently completed prefetch. It's consumed (and
+// cleared) by the next getLyricsDataForCurrentTrack call for the same track. If
+// the real request arrives before prefetch finishes, or is for a different
+// track, the prefetch result is simply ignored — this is a best-effort handoff,
+// not a general cache.
+private struct PrefetchedLyrics {
+    let trackId: String
+    let data: Data
+}
+private var prefetchedResult: PrefetchedLyrics?
+
+// Track ID currently being prefetched, to avoid duplicate background fetches.
+private var prefetchingTrackId: String?
+
+/// Kicks off a background lyrics fetch for `trackId` so the result is ready
+/// before Spotify fires its `/color-lyrics/v2` request.
+/// Safe to call multiple times — duplicate calls for the same track are ignored.
+func prefetchLyricsIfNeeded(trackId: String) {
+    guard UserDefaults.lyricsSource.isReplacingLyrics else { return }
+    // Already have a result waiting, or already fetching — nothing to do.
+    if prefetchedResult?.trackId == trackId { return }
+    if prefetchingTrackId == trackId { return }
+
+    prefetchingTrackId = trackId
+    writeDebugLog("[Lyrics] prefetch start for \(trackId)")
+
+    DispatchQueue.global(qos: .userInitiated).async {
+        defer {
+            if prefetchingTrackId == trackId {
+                prefetchingTrackId = nil
+            }
+        }
+        do {
+            var lyrics = try loadCustomLyricsForTrackId(trackId)
+
+            // Apply color so the prefetched payload is fully valid on its own.
+            // Mirrors the logic in getLyricsDataForCurrentTrack; prefetch has no
+            // access to Spotify's original lyrics object, so displayOriginalColors
+            // can't be honored here — falls back to the static/bg/gray logic.
+            let lyricsColorsSettings = UserDefaults.lyricsColors
+            if !lyricsColorsSettings.displayOriginalColors {
+                let color: Color
+                if lyricsColorsSettings.useStaticColor {
+                    color = Color(hex: lyricsColorsSettings.staticColor)
+                } else if let uiColor = backgroundViewModel?.color() {
+                    color = Color(uiColor).normalized(lyricsColorsSettings.normalizationFactor)
+                } else {
+                    color = Color.gray
+                }
+                lyrics.colors = LyricsColors.with {
+                    $0.backgroundColor = color.uInt32
+                    $0.lineColor = Color.black.uInt32
+                    $0.activeLineColor = Color.white.uInt32
+                }
+            }
+
+            if let data = try? lyrics.serializedData() {
+                prefetchedResult = PrefetchedLyrics(trackId: trackId, data: data)
+                writeDebugLog("[Lyrics] prefetch complete for \(trackId)")
+            }
+        } catch {
+            writeDebugLog("[Lyrics] prefetch failed for \(trackId): \(error)")
+        }
+    }
+}
+
 /// Returns a serialized empty `Lyrics` protobuf payload.
 /// Used as a fallback when every lyrics source (including Genius fallback) fails,
 /// so we show "no lyrics" instead of leaking Spotify's own Musixmatch response.
@@ -305,15 +386,7 @@ func getLyricsDataForCurrentTrack(_ originalPath: String, originalLyrics: Lyrics
     
     // track id from URL path; player objects are nil on 9.1.6
     // path: /color-lyrics/v2/track/{trackId}
-    let trackIdentifier: String
-    if let range = originalPath.range(of: #"/track/([a-zA-Z0-9]+)"#, options: .regularExpression) {
-        let match = originalPath[range]
-        trackIdentifier = String(match.split(separator: "/").last ?? "")
-    } else {
-        throw LyricsError.noCurrentTrack
-    }
-
-    if trackIdentifier.isEmpty {
+    guard let trackIdentifier = extractTrackId(from: originalPath), !trackIdentifier.isEmpty else {
         throw LyricsError.noCurrentTrack
     }
 
@@ -321,6 +394,17 @@ func getLyricsDataForCurrentTrack(_ originalPath: String, originalLyrics: Lyrics
         capturedTrackTitle = nil
         capturedArtistName = nil
         capturedTrackId = nil
+    }
+
+    // Use a prefetched result if one finished in time for this track.
+    // Note: if displayOriginalColors is on, the prefetched payload won't carry
+    // Spotify's true original colors (prefetch has no access to `originalLyrics`),
+    // so it falls back to static/bg/gray coloring in that case — see the caveat
+    // in prefetchLyricsIfNeeded.
+    if let prefetched = prefetchedResult, prefetched.trackId == trackIdentifier {
+        prefetchedResult = nil
+        writeDebugLog("[Lyrics] using prefetched result for \(trackIdentifier)")
+        return prefetched.data
     }
 
     var lyrics = try loadCustomLyricsForTrackId(trackIdentifier)
@@ -352,6 +436,5 @@ func getLyricsDataForCurrentTrack(_ originalPath: String, originalLyrics: Lyrics
         }
     }
     
-    let serializedData = try lyrics.serializedData()
-    return serializedData
+    return try lyrics.serializedData()
 }

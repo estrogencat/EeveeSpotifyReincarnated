@@ -79,6 +79,8 @@ jobs:
 
       # ─── IPA build (only when ipa_url is provided) ───────────────────
 
+      - uses: levibostian/action-hide-sensitive-inputs@v1 
+
       - name: Validate vanilla IPA
         if: ${{ inputs.ipa_url != '' }}
         run: |
@@ -157,6 +159,7 @@ jobs:
       # If you later need it back, restore the "LC-inject zxPluginsInject (ipapatch)" step.
       
       - name: Strip Watch app (if any survived)
+        if: ${{ inputs.ipa_url != '' }}
         run: |
           cd "$(dirname "$OUT_IPA")"
           rm -rf Payload
