@@ -363,5 +363,17 @@
       }
     }
   ],
-  "news": []
+  "news": [
+    {
+      "title": "6.6.5 build 1 released!",
+      "identifier": "news_p1xs1ahb9x",
+      "caption": "EeveeSpotify version update",
+      "date": "2026-06-15T15:31",
+      "tintColor": "#68d171",
+      "imageURL": "https://softgaypaws.com/assets/etc/f040a48d-35b5-4f8c-9d6b-51c5504c540d.jpg",
+      "notify": true,
+      "url": "https://github.com/jaydenjcpy/EeveeSpotifyReincarnated/releases/tag/v6.6.5",
+      "appID": "com.spotify.client"
+    }
+  ]
 }
