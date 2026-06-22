@@ -40,7 +40,7 @@
           "date": "2026-06-22T22:45:52Z",
           "size": 123696842,
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.748-6.6.5-2026-06-22-22-43-37/TestFlight-ES-9.1.60.748-ESR-6.6.5-patched.ipa",
-          "buildVersion": "9160748",
+          "buildVersion": "916000748",
           "minOSVersion": "16.0"
         },
         {
@@ -48,7 +48,7 @@
           "date": "2026-06-13T21:34:29Z",
           "size": 122190777,
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4-patched.ipa",
-          "buildVersion": "9160383",
+          "buildVersion": "916000748",
           "minOSVersion": "16.0"
         },
         {
@@ -136,7 +136,7 @@
           "date": "2026-06-22T22:45:52Z",
           "size": 117145443,
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.748-6.6.5-2026-06-22-22-43-37/TestFlight-ES-9.1.60.748-ESR-6.6.5.ipa",
-          "buildVersion": "9160748",
+          "buildVersion": "916000748",
           "minOSVersion": "16.0"
         },
         {
@@ -144,7 +144,7 @@
           "date": "2026-06-13T21:34:29Z",
           "size": 115657219,
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.60.383-6.6.4-2026-06-13-21-33-00/TestFlight-ES-9.1.60.383-ESR-6.6.4.ipa",
-          "buildVersion": "9160383",
+          "buildVersion": "916000748",
           "minOSVersion": "16.0"
         },
         {
