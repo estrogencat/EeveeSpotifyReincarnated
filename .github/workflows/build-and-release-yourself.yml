@@ -168,6 +168,11 @@ jobs:
             SPOT_VERSION=$(unzip -p ${{ github.workspace }}/spotify.ipa 'Payload/Spotify.app/Info.plist' \
                 | plutil -extract CFBundleShortVersionString raw - 2>/dev/null || echo "unknown")
           fi
+
+          # grab SpotifyVersionPacked directly from the IPA for accurate buildVersion in app-repo.json
+          PACKED_VER=$(unzip -p ${{ github.workspace }}/spotify.ipa 'Payload/Spotify.app/Info.plist' \
+              | plutil -extract SpotifyVersionPacked raw - 2>/dev/null || true)
+          echo "SPOTIFY_VERSION_PACKED=${PACKED_VER}" >> $GITHUB_ENV
               
           if [ -f "$DEB_EXTRACT/control" ]; then
             EEVEE_VERSION=$(grep -E '^Version:' "$DEB_EXTRACT/control" | awk '{print $2}')
@@ -258,9 +263,37 @@ jobs:
           PATCHED_OUT="${OUT_IPA%.ipa}-patched.ipa"
           cp "$OUT_IPA" "$PATCHED_OUT"
           ipapatch --input "$PATCHED_OUT" --inplace --noconfirm \
-                   --dylib packages/zxPluginsInject.dylib
+                   --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> $GITHUB_ENV
-          
+
+      # ── NEW STEP ─────────────────────────────────────────────────────────────
+      # Write the real SpotifyVersionPacked integer to either `build` or
+      # `build_testflight` at the repo root so update_repo can read it instead
+      # of using the inaccurate dots-stripped version string.
+      - name: Write SpotifyVersionPacked to build version file
+        run: |
+          if [ -z "$SPOTIFY_VERSION_PACKED" ]; then
+            echo "::warning::SpotifyVersionPacked not found in IPA — skipping build file update"
+            exit 0
+          fi
+
+          if [[ "$FILE_PREFIX" == "TestFlight-ES" ]]; then
+            BUILD_FILE="build_testflight"
+          else
+            BUILD_FILE="build"
+          fi
+
+          printf '%s' "$SPOTIFY_VERSION_PACKED" > "$BUILD_FILE"
+          echo "→ wrote $SPOTIFY_VERSION_PACKED to $BUILD_FILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$BUILD_FILE"
+          git diff --cached --quiet || git commit -m "chore: update $BUILD_FILE → $SPOTIFY_VERSION_PACKED [skip ci]"
+          git pull --rebase
+          git push
+      # ─────────────────────────────────────────────────────────────────────────
+
       - name: Fetch original changelog and append warning
         env:
           GH_TOKEN: ${{ github.token }}
