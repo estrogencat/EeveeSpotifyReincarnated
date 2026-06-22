@@ -88,43 +88,39 @@ jobs:
               # calculate the base version for loose matching! (e.g. 9160)
               BASE_VER=$(echo "$VERSION" | cut -d. -f1-3 | tr -d '.')
               
-              # ── Apple Math Generator! ──
-              # check if it is a 4-part version (like TestFlight 9.1.60.383)
+              # ── Apple Math Generator for FALLBACK_VER! ──
               if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
                 V1="${BASH_REMATCH[1]}"
                 V2="${BASH_REMATCH[2]}"
                 V3="${BASH_REMATCH[3]}"
                 V4="${BASH_REMATCH[4]}"
-                # this mathematically pads the 4th segment with zeros!
                 V4_PADDED=$(printf "%05d" "$V4")
                 FALLBACK_VER="${V1}${V2}${V3}${V4_PADDED}"
                 IS_4_PART=true
               else
-                # standard fallback for 3-part versions (like Stable 9.1.58)
                 RAW_VER="${VERSION//./}"
-                # pad the right side with zeros to force exactly 9 digits!
                 PAD="${RAW_VER}000000000"
                 FALLBACK_VER="${PAD:0:9}"
                 IS_4_PART=false
               fi
-              # ───────────────────────────
+              # ────────────────────────────────────────────
               
               # grab the existing build version from our backup file (if it exists!)
               EXISTING_BUILD=$(jq -r --arg ver "$VERSION" --argjson idx "$APP_INDEX" '(.apps[$idx].versions // [])[] | select(.version == $ver) | .buildVersion' backup-repo.json | head -n 1)
               
               # ── intelligent build version assignment ──
               if [[ "$IS_4_PART" == true ]]; then
-                # we know the EXACT math for 4-part versions!
-                # this fixes ur corrupted backups and assigns the perfect 9-digit code every single time!
+                # For 4-part versions (TestFlight), Apple Math EXACTLY generates the CFBundleVersion!
+                # Bypassing the packed variables entirely makes cross-contamination impossible!
                 BUILD_VER="$FALLBACK_VER"
               else
-                # for 3-part versions (Stable), we can't do the math, so we rely on backups & build files!
-                if [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ ]]; then
-                  BUILD_VER="$EXISTING_BUILD"
+                # For 3-part versions (Stable), we MUST use the packed files or valid backups!
+                if [[ "$APP_INDEX" -ge 2 && -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$BASE_VER"* ]]; then
+                  BUILD_VER="$PACKED_STABLE"
                 elif [[ "$APP_INDEX" -le 1 && -n "$PACKED_TESTFLIGHT" && "$PACKED_TESTFLIGHT" == "$BASE_VER"* ]]; then
                   BUILD_VER="$PACKED_TESTFLIGHT"
-                elif [[ "$APP_INDEX" -ge 2 && -n "$PACKED_STABLE" && "$PACKED_STABLE" == "$BASE_VER"* ]]; then
-                  BUILD_VER="$PACKED_STABLE"
+                elif [[ "$EXISTING_BUILD" =~ ^[0-9]{9}$ && "$EXISTING_BUILD" == "$BASE_VER"* ]]; then
+                  BUILD_VER="$EXISTING_BUILD"
                 else
                   BUILD_VER="$FALLBACK_VER"
                 fi
