@@ -18,6 +18,11 @@ on:
         default: false
         required: true
         type: boolean
+      build_liquid_glass:
+        description: "Also build a Liquid Glass variant (iOS 26)"
+        default: false
+        required: false
+        type: boolean
       upload_local:
         description: "Upload to this channel"
         default: true
@@ -49,6 +54,12 @@ jobs:
     permissions:
       contents: write
 
+    outputs:
+      timestamp: ${{ steps.meta.outputs.timestamp }}
+      file_prefix: ${{ steps.meta.outputs.file_prefix }}
+      spotify_version: ${{ steps.build.outputs.spotify_version }}
+      tweak_version: ${{ steps.build.outputs.tweak_version }}
+
     steps:
       - uses: actions/checkout@v5
 
@@ -68,13 +79,16 @@ jobs:
 
           if [[ "$IPA_URL" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
             echo "URL_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
-            echo "FILE_PREFIX=TestFlight-ES" >> "$GITHUB_ENV"
+            PREFIX=TestFlight-ES
             echo "found testflight version in url: ${BASH_REMATCH[1]}"
           elif [ "$USE_ALT_NAME" = "true" ]; then
-            echo "FILE_PREFIX=TestFlight-ES" >> "$GITHUB_ENV"
+            PREFIX=TestFlight-ES
           else
-            echo "FILE_PREFIX=EeveeSpotify" >> "$GITHUB_ENV"
+            PREFIX=EeveeSpotify
           fi
+
+          echo "FILE_PREFIX=$PREFIX" >> "$GITHUB_ENV"
+          echo "file_prefix=$PREFIX" >> "$GITHUB_OUTPUT"
 
       - name: Download tweak artifact if no URL provided
         if: ${{ inputs.tweak_url == '' }}
@@ -186,6 +200,7 @@ jobs:
           echo "OPENSPOTIFY_APPEX=$RUNNER_TEMP/OpenSpotifySafariExtension/OpenSpotifySafariExtension.appex" >> "$GITHUB_ENV"
 
       - name: Inject deb into IPA (cyan)
+        id: build
         run: |
           set -eo pipefail
           mkdir -p Outputs/IPAS
@@ -215,6 +230,11 @@ jobs:
             echo "TWEAK_VERSION=$EEVEE_VERSION"
             echo "OUT_IPA=$OUT"
           } >> "$GITHUB_ENV"
+
+          {
+            echo "spotify_version=$SPOT_VERSION"
+            echo "tweak_version=$EEVEE_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
           INJECT=("$DYLIB_SRC")
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
@@ -270,6 +290,16 @@ jobs:
           ipapatch --input "$PATCHED_OUT" --inplace --noconfirm \
                    --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
+
+      - name: Hand IPAs to the Liquid Glass job
+        if: ${{ inputs.build_liquid_glass }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipas-${{ github.run_id }}
+          path: Outputs/IPAS/*.ipa
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
 
       - name: Write SpotifyVersionPacked to build version file
         run: |
@@ -385,4 +415,157 @@ jobs:
           body_path: changelog.txt
           tag_name: ${{ env.TWEAK_VERSION }}-${{ steps.meta.outputs.timestamp }}
           name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ steps.meta.outputs.timestamp }}
+          files: Outputs/IPAS/*.ipa
+
+  liquid_glass:
+    needs: inject
+    if: ${{ inputs.build_liquid_glass }}
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    env:
+      SPOTIFY_VERSION: ${{ needs.inject.outputs.spotify_version }}
+      TWEAK_VERSION: ${{ needs.inject.outputs.tweak_version }}
+      FILE_PREFIX: ${{ needs.inject.outputs.file_prefix }}
+      TIMESTAMP: ${{ needs.inject.outputs.timestamp }}
+
+    steps:
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ipas-${{ github.run_id }}
+          path: Outputs/IPAS
+
+      - name: Apply Liquid Glass to the built IPAs
+        id: lg
+        run: |
+          set -eo pipefail
+          cd Outputs/IPAS
+          shopt -s nullglob
+
+          made=()
+          for src in *.ipa; do
+            case "$src" in *-LG.ipa|*-LG-patched.ipa) continue;; esac
+
+            base="${src%.ipa}"; suffix=""
+            case "$base" in *-patched) base="${base%-patched}"; suffix="-patched";; esac
+            out="${base}-LG${suffix}.ipa"
+
+            rm -rf Payload
+            unzip -q "$src"
+            APP="$(find Payload -maxdepth 2 -name '*.app' -type d | head -1)"
+            [ -n "$APP" ] || { echo "::error::no .app inside $src"; exit 1; }
+            PLIST="$APP/Info.plist"
+
+            /usr/libexec/PlistBuddy -c "Delete :UIDesignRequiresCompatibility" "$PLIST" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 26.0" "$PLIST" 2>/dev/null \
+              || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 26.0" "$PLIST"
+
+            echo "$src -> $out (MinimumOSVersion $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$PLIST"))"
+
+            rm -f "$out"
+            zip -qry "$out" Payload
+            rm -rf Payload
+            made+=("$out")
+          done
+
+          [ "${#made[@]}" -gt 0 ] || { echo "::error::no source ipa found to convert"; exit 1; }
+
+          for f in *.ipa; do
+            case "$f" in *-LG.ipa|*-LG-patched.ipa) continue;; esac
+            echo "dropping non-LG source $f"
+            rm -f "$f"
+          done
+          ls -la
+
+          echo "regular_ipa=Outputs/IPAS/${FILE_PREFIX}-${SPOTIFY_VERSION}-ESR-${TWEAK_VERSION}-LG.ipa" >> "$GITHUB_OUTPUT"
+          echo "patched_ipa=Outputs/IPAS/${FILE_PREFIX}-${SPOTIFY_VERSION}-ESR-${TWEAK_VERSION}-LG-patched.ipa" >> "$GITHUB_OUTPUT"
+
+      - name: Build changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat << 'MARKDOWN' > changelog.txt
+          # this might not be the latest changelog for the tweak version!
+
+          * this only grabs from releases/latest as there is no changelog in actions. to check if it is newer than the release, go to commits in the original repo @ [GitHub](https://github.com/jaydenjcpy/EeveeSpotifyReincarnated) :P
+          ---
+          ### original changelog:
+
+          MARKDOWN
+          gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
+
+      - name: Upload to ALT REPO Releases
+        if: ${{ inputs.upload_to_alt_repo }}
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          repository: ${{ secrets.ALT_REPO_NAME }}
+          token: ${{ secrets.ALT_REPO_TOKEN }}
+          body_path: changelog.txt
+          tag_name: ${{ env.SPOTIFY_VERSION }}-${{ env.TWEAK_VERSION }}-LG-${{ env.TIMESTAMP }}
+          name: ${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Swift ${{ env.TWEAK_VERSION }} // Liquid Glass // Multi Upload from github.repository
+          files: Outputs/IPAS/*.ipa
+
+      - name: Override changelog
+        if: ${{ inputs.changelog_changer != '' }}
+        env:
+          CUSTOM_LOG: ${{ inputs.changelog_changer }}
+        run: printf '%s\n' "$CUSTOM_LOG" > changelog.txt
+
+      - name: Upload to Telegram
+        if: ${{ inputs.upload_to_telegram }}
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          REGULAR_IPA: ${{ steps.lg.outputs.regular_ipa }}
+          PATCHED_IPA: ${{ steps.lg.outputs.patched_ipa }}
+          CAPTION: |
+            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }} // Liquid Glass, tweak by @compiledipas
+        run: |
+          set -eo pipefail
+          pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
+
+          cat << 'PYTHON' > upload.py
+          import os, asyncio, re
+          from telethon import TelegramClient
+          from FastTelethonhelper import fast_upload
+
+          chat_id = os.environ['TG_CHAT_ID']
+          if chat_id.lstrip('-').isdigit():
+              chat_id = int(chat_id)
+
+          async def main():
+              client = await TelegramClient(
+                  'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
+              ).start(bot_token=os.environ['TG_BOT_TOKEN'])
+
+              with open('changelog.txt', encoding='utf-8') as f:
+                  changelog = re.sub(r'^(#+)\s+(.+)$', r'**\2**', f.read(), flags=re.MULTILINE)
+
+              caption = (os.environ['CAPTION'] + "\n" + changelog)[:1024]
+
+              files = [
+                  await fast_upload(client, os.environ['REGULAR_IPA']),
+                  await fast_upload(client, os.environ['PATCHED_IPA']),
+              ]
+              await client.send_file(chat_id, files, caption=["", caption])
+              await client.disconnect()
+
+          asyncio.run(main())
+          PYTHON
+
+          python3 upload.py
+          echo "im done bitch ass, check telegram"
+
+      - name: Upload to GitHub Releases
+        if: ${{ inputs.upload_local }}
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          body_path: changelog.txt
+          tag_name: ${{ env.TWEAK_VERSION }}-LG-${{ env.TIMESTAMP }}
+          name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Liquid Glass // Build Timestamp ${{ env.TIMESTAMP }}
           files: Outputs/IPAS/*.ipa
