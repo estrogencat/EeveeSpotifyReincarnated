@@ -1,0 +1,388 @@
+name: Create IPA Packages (Optimised)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: "URL to decrypted IPA"
+        default: ""
+        required: true
+        type: string
+      tweak_url:
+        description: "URL to .deb"
+        default: ""
+        required: false
+        type: string
+      use_alt_name:
+        description: "Append TestFlight prefix?"
+        default: false
+        required: true
+        type: boolean
+      upload_local:
+        description: "Upload to this channel"
+        default: true
+        required: true
+        type: boolean
+      upload_to_alt_repo:
+        description: "Multi Upload"
+        default: false
+        required: true
+        type: boolean
+      upload_to_telegram:
+        description: "Upload to Telegram channel"
+        default: false
+        required: true
+        type: boolean
+      changelog_changer:
+        description: "Put the changelog here, this only edits the telegram changelog"
+        default: ""
+        required: false
+        type: string
+
+concurrency:
+  group: build-version-file
+  cancel-in-progress: false
+
+jobs:
+  inject:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.1.1'
+
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - name: Resolve prefix & timestamp
+        id: meta
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+          USE_ALT_NAME: ${{ inputs.use_alt_name }}
+        run: |
+          echo "timestamp=$(date +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_OUTPUT"
+
+          if [[ "$IPA_URL" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            echo "URL_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+            echo "FILE_PREFIX=TestFlight-ES" >> "$GITHUB_ENV"
+            echo "found testflight version in url: ${BASH_REMATCH[1]}"
+          elif [ "$USE_ALT_NAME" = "true" ]; then
+            echo "FILE_PREFIX=TestFlight-ES" >> "$GITHUB_ENV"
+          else
+            echo "FILE_PREFIX=EeveeSpotify" >> "$GITHUB_ENV"
+          fi
+
+      - name: Download tweak artifact if no URL provided
+        if: ${{ inputs.tweak_url == '' }}
+        uses: dawidd6/action-download-artifact@v23
+        with:
+          github_token: ${{ secrets.PAT }}
+          repo: SideloadLabs/EeveeSpotifyReincarnated
+          workflow_search: true
+          workflow_conclusion: success
+          name: (EeveeSpotify-rootless-DEB|EeveeSpotify-DEBS|com\.eevee\.spotify_.*_iphoneos-arm64\.deb)
+          name_is_regexp: true
+          path: ${{ github.workspace }}/artifact-temp
+
+      - name: Prepare downloaded artifact
+        if: ${{ inputs.tweak_url == '' }}
+        run: |
+          pick() { find "$GITHUB_WORKSPACE/artifact-temp" -type f -name "$1" ! -name "*roothide*" | head -n 1; }
+          DEB_FILE=$(pick "*_iphoneos-arm64.deb")
+          [ -n "$DEB_FILE" ] || DEB_FILE=$(pick "*arm64.deb")
+          [ -n "$DEB_FILE" ] || DEB_FILE=$(pick "*.deb")
+
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::could not find a usable rootless .deb in the downloaded artifact! ;w;"
+            ls -R "$GITHUB_WORKSPACE/artifact-temp"
+            exit 1
+          fi
+          echo "using $DEB_FILE"
+
+          mv "$DEB_FILE" "$GITHUB_WORKSPACE/eevee.deb"
+          rm -rf "$GITHUB_WORKSPACE/artifact-temp"
+
+      - name: Fetch assets & install tools (parallel)
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+          TWEAK_URL: ${{ inputs.tweak_url }}
+          DYLIB_URL: ${{ secrets.DYLIB }}
+        run: |
+          set -eo pipefail
+          JOBS="$RUNNER_TEMP/jobs"; : > "$JOBS"
+
+          bg() {
+            local name="$1"; shift
+            ( "$@" ) > "$RUNNER_TEMP/$name.log" 2>&1 &
+            echo "$! $name" >> "$JOBS"
+          }
+
+          get() { curl -fL --retry 3 --retry-delay 2 --retry-all-errors -o "$1" "$2"; }
+
+          check_mime() {
+            local got; got=$(file --mime-type -b "$1")
+            for want in "${@:2}"; do [ "$got" = "$want" ] && return 0; done
+            echo "::error::$1 has unexpected type: $got"; return 1
+          }
+
+          fetch_ipa() {
+            get "$GITHUB_WORKSPACE/spotify.ipa" "$IPA_URL"
+            check_mime "$GITHUB_WORKSPACE/spotify.ipa" application/x-ios-app application/zip
+          }
+
+          fetch_deb() {
+            [ -n "$TWEAK_URL" ] || return 0
+            get "$GITHUB_WORKSPACE/eevee.deb" "$TWEAK_URL"
+            check_mime "$GITHUB_WORKSPACE/eevee.deb" application/vnd.debian.binary-package
+          }
+
+          fetch_dylib() {
+            mkdir -p "$GITHUB_WORKSPACE/extra_dylibs"
+            get "$GITHUB_WORKSPACE/extra_dylibs/zxPluginsInject.dylib" "$DYLIB_URL"
+          }
+
+          fetch_appex() {
+            local dir="$RUNNER_TEMP/OpenSpotifySafariExtension"
+            rm -rf "$dir"
+            git clone --depth 1 --no-tags \
+              https://github.com/BillyCurtis/OpenSpotifySafariExtension.git "$dir"
+            [ -e "$dir/OpenSpotifySafariExtension.appex" ]
+          }
+
+          install_tools() {
+            brew install --quiet dpkg
+            python3 -m pip install --quiet --upgrade --break-system-packages \
+              git+https://github.com/asdfzxcvbn/pyzule-rw.git
+            local suffix=macos-arm64
+            [ "$(uname -m)" = "x86_64" ] && suffix=macos-amd64
+            sudo curl -fsSL --retry 3 \
+              "https://github.com/asdfzxcvbn/ipapatch/releases/latest/download/ipapatch.${suffix}" \
+              -o /usr/local/bin/ipapatch
+            sudo chmod +x /usr/local/bin/ipapatch
+          }
+
+          bg ipa    fetch_ipa
+          bg deb    fetch_deb
+          bg dylib  fetch_dylib
+          bg appex  fetch_appex
+          bg tools  install_tools
+
+          failed=0
+          while read -r pid name; do
+            if wait "$pid"; then
+              echo "::group::$name ok"
+            else
+              echo "::group::$name FAILED"; failed=1
+            fi
+            cat "$RUNNER_TEMP/$name.log"
+            echo "::endgroup::"
+          done < "$JOBS"
+
+          [ "$failed" -eq 0 ] || { echo "::error::one or more fetch/install jobs failed"; exit 1; }
+          echo "OPENSPOTIFY_APPEX=$RUNNER_TEMP/OpenSpotifySafariExtension/OpenSpotifySafariExtension.appex" >> "$GITHUB_ENV"
+
+      - name: Inject deb into IPA (cyan)
+        run: |
+          set -eo pipefail
+          mkdir -p Outputs/IPAS
+          DEB_EXTRACT="$RUNNER_TEMP/deb-extract"; mkdir -p "$DEB_EXTRACT"
+          dpkg-deb -R "$GITHUB_WORKSPACE/eevee.deb" "$DEB_EXTRACT"
+
+          DYLIB_SRC=$(find "$DEB_EXTRACT" -name 'EeveeSpotify.dylib' | head -1)
+          BUNDLE_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSpotify.bundle' | head -1)
+          FRAMEWORK_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSwiftProtobuf.framework' | head -1)
+
+          PLIST="$RUNNER_TEMP/spotify-Info.plist"
+          unzip -p "$GITHUB_WORKSPACE/spotify.ipa" 'Payload/Spotify.app/Info.plist' > "$PLIST"
+
+          SPOT_VERSION="${URL_VERSION:-}"
+          [ -n "$SPOT_VERSION" ] || SPOT_VERSION=$(plutil -extract CFBundleShortVersionString raw "$PLIST" 2>/dev/null || echo "unknown")
+          PACKED_VER=$(plutil -extract SpotifyVersionPacked raw "$PLIST" 2>/dev/null || true)
+
+          CONTROL="$DEB_EXTRACT/control"
+          [ -f "$CONTROL" ] || CONTROL="$DEB_EXTRACT/DEBIAN/control"
+          EEVEE_VERSION=$(awk '/^Version:/ {print $2; exit}' "$CONTROL")
+
+          OUT="Outputs/IPAS/${FILE_PREFIX}-${SPOT_VERSION}-ESR-${EEVEE_VERSION}.ipa"
+
+          {
+            echo "SPOTIFY_VERSION=$SPOT_VERSION"
+            echo "SPOTIFY_VERSION_PACKED=$PACKED_VER"
+            echo "TWEAK_VERSION=$EEVEE_VERSION"
+            echo "OUT_IPA=$OUT"
+          } >> "$GITHUB_ENV"
+
+          INJECT=("$DYLIB_SRC")
+          [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
+          [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
+
+          cyan -i "$GITHUB_WORKSPACE/spotify.ipa" -o "$OUT" \
+               -f "${INJECT[@]}" -c 9 -m 15.0 -du
+
+      - name: Post-process IPA
+        env:
+          JSON_PATH: ${{ secrets.PATH1 }}
+          JSON_KEY: ${{ secrets.XESR }}
+          JSON_VALUE: ${{ secrets.HELLO }}
+          HTML_PATH: ${{ secrets.PATH2 }}
+          HTML_INJECT: ${{ secrets.HTML }}
+        run: |
+          set -eo pipefail
+          cd "$(dirname "$OUT_IPA")"
+          IPA_NAME="$(basename "$OUT_IPA")"
+
+          rm -rf Payload
+          unzip -q "$IPA_NAME"
+          APP="$(find Payload -maxdepth 2 -name '*.app' -type d | head -1)"
+          [ -n "$APP" ] || { echo "::error::no .app inside $IPA_NAME"; exit 1; }
+
+          touch Payload/softgaypaws.com
+          rm -rf "$APP/com.apple.WatchPlaceholder" "$APP/Watch"
+
+          if [ -n "$JSON_PATH" ] && [ -f "$JSON_PATH" ] && [ -n "$JSON_VALUE" ]; then
+            jq --arg k "$JSON_KEY" --arg v "$JSON_VALUE" '. + {($k): $v}' "$JSON_PATH" > tmp.json
+            mv tmp.json "$JSON_PATH"
+          fi
+
+          if [ -n "$HTML_PATH" ] && [ -f "$HTML_PATH" ] && [ -n "$HTML_INJECT" ]; then
+            perl -pi -e 's|(</body>)|$ENV{HTML_INJECT}$1|i' "$HTML_PATH"
+          fi
+
+          "$GITHUB_WORKSPACE/Tools/alt-icons.sh" "$PWD/$APP"
+
+          mkdir -p "$APP/PlugIns"
+          rm -rf "$APP/PlugIns/OpenSpotifySafariExtension.appex"
+          cp -R "$OPENSPOTIFY_APPEX" "$APP/PlugIns/OpenSpotifySafariExtension.appex"
+
+          rm -f "$IPA_NAME"
+          zip -qry "$IPA_NAME" Payload
+          rm -rf Payload
+
+      - name: Create patched duplicate & LC-inject zxPluginsInject
+        run: |
+          set -eo pipefail
+          PATCHED_OUT="${OUT_IPA%.ipa}-patched.ipa"
+          cp "$OUT_IPA" "$PATCHED_OUT"
+          ipapatch --input "$PATCHED_OUT" --inplace --noconfirm \
+                   --dylib extra_dylibs/zxPluginsInject.dylib
+          echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
+
+      - name: Write SpotifyVersionPacked to build version file
+        run: |
+          set -eo pipefail
+          if [ -z "$SPOTIFY_VERSION_PACKED" ]; then
+            echo "::warning::SpotifyVersionPacked not found in IPA — skipping build file update"
+            exit 0
+          fi
+
+          BUILD_FILE=build
+          [ "$FILE_PREFIX" = "TestFlight-ES" ] && BUILD_FILE=build_testflight
+
+          printf '%s' "$SPOTIFY_VERSION_PACKED" > "$BUILD_FILE"
+          echo "wrote $SPOTIFY_VERSION_PACKED to $BUILD_FILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$BUILD_FILE"
+          git diff --cached --quiet && { echo "no change"; exit 0; }
+          git commit -m "chore: update $BUILD_FILE to $SPOTIFY_VERSION_PACKED [skip ci]"
+
+          BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "$BRANCH" && git push && exit 0
+            echo "push attempt $i lost a race, retrying"
+            sleep $(( RANDOM % 5 + 3 ))
+          done
+          echo "::error::could not push $BUILD_FILE after 5 attempts"
+          exit 1
+
+      - name: Build changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat << 'MARKDOWN' > changelog.txt
+          # this might not be the latest changelog for the tweak version!
+
+          * this only grabs from releases/latest as there is no changelog in actions. to check if it is newer than the release, go to commits in the original repo @ [GitHub](https://github.com/jaydenjcpy/EeveeSpotifyReincarnated) :P
+          ---
+          ### original changelog:
+
+          MARKDOWN
+          gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
+
+      - name: Upload to ALT REPO Releases
+        if: ${{ inputs.upload_to_alt_repo }}
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          repository: ${{ secrets.ALT_REPO_NAME }}
+          token: ${{ secrets.ALT_REPO_TOKEN }}
+          body_path: changelog.txt
+          tag_name: ${{ env.SPOTIFY_VERSION }}-${{ env.TWEAK_VERSION }}-${{ steps.meta.outputs.timestamp }}
+          name: ${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Swift ${{ env.TWEAK_VERSION }} // Multi Upload from github.repository
+          files: Outputs/IPAS/*.ipa
+
+      - name: Override changelog
+        if: ${{ inputs.changelog_changer != '' }}
+        env:
+          CUSTOM_LOG: ${{ inputs.changelog_changer }}
+        run: printf '%s\n' "$CUSTOM_LOG" > changelog.txt
+
+      - name: Upload to Telegram
+        if: ${{ inputs.upload_to_telegram }}
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          REGULAR_IPA: ${{ env.OUT_IPA }}
+          PATCHED_IPA: ${{ env.PATCHED_IPA }}
+          CAPTION: |
+            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas
+        run: |
+          set -eo pipefail
+          pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
+
+          cat << 'PYTHON' > upload.py
+          import os, asyncio, re
+          from telethon import TelegramClient
+          from FastTelethonhelper import fast_upload
+
+          chat_id = os.environ['TG_CHAT_ID']
+          if chat_id.lstrip('-').isdigit():
+              chat_id = int(chat_id)
+
+          async def main():
+              client = await TelegramClient(
+                  'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
+              ).start(bot_token=os.environ['TG_BOT_TOKEN'])
+
+              with open('changelog.txt', encoding='utf-8') as f:
+                  changelog = re.sub(r'^(#+)\s+(.+)$', r'**\2**', f.read(), flags=re.MULTILINE)
+
+              caption = (os.environ['CAPTION'] + "\n" + changelog)[:1024]
+
+              files = [
+                  await fast_upload(client, os.environ['REGULAR_IPA']),
+                  await fast_upload(client, os.environ['PATCHED_IPA']),
+              ]
+              await client.send_file(chat_id, files, caption=["", caption])
+              await client.disconnect()
+
+          asyncio.run(main())
+          PYTHON
+
+          python3 upload.py
+          echo "im done bitch ass, check telegram"
+
+      - name: Upload to GitHub Releases
+        if: ${{ inputs.upload_local }}
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          body_path: changelog.txt
+          tag_name: ${{ env.TWEAK_VERSION }}-${{ steps.meta.outputs.timestamp }}
+          name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ steps.meta.outputs.timestamp }}
+          files: Outputs/IPAS/*.ipa
