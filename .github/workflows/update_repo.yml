@@ -76,27 +76,22 @@ jobs:
             if [[ "$NAME" =~ TestFlight-ES-([0-9.]+) ]]; then
               VERSION="${BASH_REMATCH[1]}"
               IS_TF=true
-              case "$NAME" in
-                *-LG-patched.ipa|*-LG.ipa) BUNDLE="" ;;
-                *-patched.ipa)             BUNDLE="com.spotify.client.tfp" ;;
-                *)                         BUNDLE="com.spotify.client.tf" ;;
-              esac
             elif [[ "$NAME" =~ EeveeSpotify-([0-9.]+) ]]; then
               VERSION="${BASH_REMATCH[1]}"
-              case "$NAME" in
-                *-LG-patched.ipa) BUNDLE="com.spotify.client.lgpatched"; MINOS="26.0" ;;
-                *-LG.ipa)         BUNDLE="com.spotify.client.lg";        MINOS="26.0" ;;
-                *-patched.ipa)    BUNDLE="com.spotify.client.patched" ;;
-                *)                BUNDLE="com.spotify.client" ;;
-              esac
             else
               continue
             fi
 
-            if [ -z "$BUNDLE" ]; then
-              echo "::warning::no app entry defined for $NAME, skipping it"
-              continue
-            fi
+            case "$NAME" in
+              *-LG-patched.ipa)
+                BUNDLE="com.spotify.client.lgpatched"; MINOS="26.0" ;;
+              *-LG.ipa)
+                BUNDLE="com.spotify.client.lg";        MINOS="26.0" ;;
+              *-patched.ipa)
+                if [ "$IS_TF" = true ]; then BUNDLE="com.spotify.client.tfp"; else BUNDLE="com.spotify.client.patched"; fi ;;
+              *)
+                if [ "$IS_TF" = true ]; then BUNDLE="com.spotify.client.tf"; else BUNDLE="com.spotify.client"; fi ;;
+            esac
 
             BASE_VER=$(echo "$VERSION" | cut -d. -f1-3 | tr -d '.')
 
