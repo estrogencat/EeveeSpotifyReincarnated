@@ -22,7 +22,16 @@
       "tintColor": "#04e154",
       "category": "other",
       "screenshots": [],
-      "versions": [],
+      "versions": [
+        {
+          "version": "9.1.74",
+          "date": "2026-08-19T20:07:43Z",
+          "size": 130085180,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-LG-2026-08-19-20-04-41/EeveeSpotify-9.1.74-ESR-6.6.8-LG-patched.ipa",
+          "buildVersion": "917402018",
+          "minOSVersion": "26.0"
+        }
+      ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {
@@ -57,7 +66,16 @@
       "tintColor": "#4f9555",
       "category": "other",
       "screenshots": [],
-      "versions": [],
+      "versions": [
+        {
+          "version": "9.1.74",
+          "date": "2026-08-19T20:07:43Z",
+          "size": 128330324,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-LG-2026-08-19-20-04-41/EeveeSpotify-9.1.74-ESR-6.6.8-LG.ipa",
+          "buildVersion": "917402018",
+          "minOSVersion": "26.0"
+        }
+      ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {
