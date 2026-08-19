@@ -49,7 +49,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  inject:
+  build:
     runs-on: macos-latest
     permissions:
       contents: write
@@ -291,8 +291,7 @@ jobs:
                    --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
 
-      - name: Hand IPAs to the Liquid Glass job
-        if: ${{ inputs.build_liquid_glass }}
+      - name: Hand IPAs to the publish jobs
         uses: actions/upload-artifact@v4
         with:
           name: ipas-${{ github.run_id }}
@@ -330,9 +329,32 @@ jobs:
           echo "::error::could not push $BUILD_FILE after 5 attempts"
           exit 1
 
+  publish:
+    needs: build
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    env:
+      SPOTIFY_VERSION: ${{ needs.build.outputs.spotify_version }}
+      TWEAK_VERSION: ${{ needs.build.outputs.tweak_version }}
+      FILE_PREFIX: ${{ needs.build.outputs.file_prefix }}
+      TIMESTAMP: ${{ needs.build.outputs.timestamp }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ipas-${{ github.run_id }}
+          path: Outputs/IPAS
+
       - name: Build changelog
         env:
           GH_TOKEN: ${{ github.token }}
+          CUSTOM_LOG: ${{ inputs.changelog_changer }}
         run: |
           cat << 'MARKDOWN' > changelog.txt
           # this might not be the latest changelog for the tweak version!
@@ -344,93 +366,50 @@ jobs:
           MARKDOWN
           gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
 
-      - name: Upload to ALT REPO Releases
-        if: ${{ inputs.upload_to_alt_repo }}
-        uses: softprops/action-gh-release@v3.0.2
+          if [ -n "$CUSTOM_LOG" ]; then
+            printf '%s\n' "$CUSTOM_LOG" > changelog-override.txt
+          else
+            cp changelog.txt changelog-override.txt
+          fi
+
+      - uses: ./.github/actions/publish
         with:
-          repository: ${{ secrets.ALT_REPO_NAME }}
-          token: ${{ secrets.ALT_REPO_TOKEN }}
-          body_path: changelog.txt
-          tag_name: ${{ env.SPOTIFY_VERSION }}-${{ env.TWEAK_VERSION }}-${{ steps.meta.outputs.timestamp }}
-          name: ${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Swift ${{ env.TWEAK_VERSION }} // Multi Upload from github.repository
           files: Outputs/IPAS/*.ipa
-
-      - name: Override changelog
-        if: ${{ inputs.changelog_changer != '' }}
-        env:
-          CUSTOM_LOG: ${{ inputs.changelog_changer }}
-        run: printf '%s\n' "$CUSTOM_LOG" > changelog.txt
-
-      - name: Upload to Telegram
-        if: ${{ inputs.upload_to_telegram }}
-        env:
-          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_API_ID: ${{ secrets.TG_API_ID }}
-          TG_API_HASH: ${{ secrets.TG_API_HASH }}
-          REGULAR_IPA: ${{ env.OUT_IPA }}
-          PATCHED_IPA: ${{ env.PATCHED_IPA }}
-          CAPTION: |
-            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas
-        run: |
-          set -eo pipefail
-          pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
-
-          cat << 'PYTHON' > upload.py
-          import os, asyncio, re
-          from telethon import TelegramClient
-          from FastTelethonhelper import fast_upload
-
-          chat_id = os.environ['TG_CHAT_ID']
-          if chat_id.lstrip('-').isdigit():
-              chat_id = int(chat_id)
-
-          async def main():
-              client = await TelegramClient(
-                  'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
-              ).start(bot_token=os.environ['TG_BOT_TOKEN'])
-
-              with open('changelog.txt', encoding='utf-8') as f:
-                  changelog = re.sub(r'^(#+)\s+(.+)$', r'**\2**', f.read(), flags=re.MULTILINE)
-
-              caption = (os.environ['CAPTION'] + "\n" + changelog)[:1024]
-
-              files = [
-                  await fast_upload(client, os.environ['REGULAR_IPA']),
-                  await fast_upload(client, os.environ['PATCHED_IPA']),
-              ]
-              await client.send_file(chat_id, files, caption=["", caption])
-              await client.disconnect()
-
-          asyncio.run(main())
-          PYTHON
-
-          python3 upload.py
-          echo "im done bitch ass, check telegram"
-
-      - name: Upload to GitHub Releases
-        if: ${{ inputs.upload_local }}
-        uses: softprops/action-gh-release@v3.0.2
-        with:
-          body_path: changelog.txt
-          tag_name: ${{ env.TWEAK_VERSION }}-${{ steps.meta.outputs.timestamp }}
-          name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ steps.meta.outputs.timestamp }}
-          files: Outputs/IPAS/*.ipa
+          body_path: changelog-override.txt
+          alt_body_path: changelog.txt
+          tag_name: ${{ env.TWEAK_VERSION }}-${{ env.TIMESTAMP }}
+          release_name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ env.TIMESTAMP }}
+          regular_ipa: Outputs/IPAS/${{ env.FILE_PREFIX }}-${{ env.SPOTIFY_VERSION }}-ESR-${{ env.TWEAK_VERSION }}.ipa
+          patched_ipa: Outputs/IPAS/${{ env.FILE_PREFIX }}-${{ env.SPOTIFY_VERSION }}-ESR-${{ env.TWEAK_VERSION }}-patched.ipa
+          caption: ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas
+          append_changelog_to_caption: 'true'
+          upload_local: ${{ inputs.upload_local }}
+          upload_to_alt_repo: ${{ inputs.upload_to_alt_repo }}
+          upload_to_telegram: ${{ inputs.upload_to_telegram }}
+          github_token: ${{ github.token }}
+          alt_repo_name: ${{ secrets.ALT_REPO_NAME }}
+          alt_repo_token: ${{ secrets.ALT_REPO_TOKEN }}
+          tg_bot_token: ${{ secrets.TG_BOT_TOKEN }}
+          tg_chat_id: ${{ secrets.TG_CHAT_ID }}
+          tg_api_id: ${{ secrets.TG_API_ID }}
+          tg_api_hash: ${{ secrets.TG_API_HASH }}
 
   liquid_glass:
-    needs: inject
+    needs: build
     if: ${{ inputs.build_liquid_glass }}
     runs-on: macos-latest
     permissions:
       contents: write
 
     env:
-      SPOTIFY_VERSION: ${{ needs.inject.outputs.spotify_version }}
-      TWEAK_VERSION: ${{ needs.inject.outputs.tweak_version }}
-      FILE_PREFIX: ${{ needs.inject.outputs.file_prefix }}
-      TIMESTAMP: ${{ needs.inject.outputs.timestamp }}
+      SPOTIFY_VERSION: ${{ needs.build.outputs.spotify_version }}
+      TWEAK_VERSION: ${{ needs.build.outputs.tweak_version }}
+      FILE_PREFIX: ${{ needs.build.outputs.file_prefix }}
+      TIMESTAMP: ${{ needs.build.outputs.timestamp }}
 
     steps:
+      - uses: actions/checkout@v5
+
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
       - uses: actions/download-artifact@v4
@@ -439,13 +418,12 @@ jobs:
           path: Outputs/IPAS
 
       - name: Apply Liquid Glass to the built IPAs
-        id: lg
         run: |
           set -eo pipefail
           cd Outputs/IPAS
           shopt -s nullglob
 
-          made=()
+          made=0
           for src in *.ipa; do
             case "$src" in *-LG.ipa|*-LG-patched.ipa) continue;; esac
 
@@ -463,15 +441,15 @@ jobs:
             /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 26.0" "$PLIST" 2>/dev/null \
               || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 26.0" "$PLIST"
 
-            echo "$src -> $out (MinimumOSVersion $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$PLIST"))"
+            echo "$src -> $out (MinimumOSVersion now $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$PLIST"))"
 
             rm -f "$out"
             zip -qry "$out" Payload
             rm -rf Payload
-            made+=("$out")
+            made=$(( made + 1 ))
           done
 
-          [ "${#made[@]}" -gt 0 ] || { echo "::error::no source ipa found to convert"; exit 1; }
+          [ "$made" -gt 0 ] || { echo "::error::no source ipa found to convert"; exit 1; }
 
           for f in *.ipa; do
             case "$f" in *-LG.ipa|*-LG-patched.ipa) continue;; esac
@@ -480,92 +458,26 @@ jobs:
           done
           ls -la
 
-          echo "regular_ipa=Outputs/IPAS/${FILE_PREFIX}-${SPOTIFY_VERSION}-ESR-${TWEAK_VERSION}-LG.ipa" >> "$GITHUB_OUTPUT"
-          echo "patched_ipa=Outputs/IPAS/${FILE_PREFIX}-${SPOTIFY_VERSION}-ESR-${TWEAK_VERSION}-LG-patched.ipa" >> "$GITHUB_OUTPUT"
+      - name: Write Liquid Glass release body
+        run: printf '%s\n' "Liquid Glass version" > changelog.txt
 
-      - name: Build changelog
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat << 'MARKDOWN' > changelog.txt
-          # this might not be the latest changelog for the tweak version!
-
-          * this only grabs from releases/latest as there is no changelog in actions. to check if it is newer than the release, go to commits in the original repo @ [GitHub](https://github.com/jaydenjcpy/EeveeSpotifyReincarnated) :P
-          ---
-          ### original changelog:
-
-          MARKDOWN
-          gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
-
-      - name: Upload to ALT REPO Releases
-        if: ${{ inputs.upload_to_alt_repo }}
-        uses: softprops/action-gh-release@v3.0.2
+      - uses: ./.github/actions/publish
         with:
-          repository: ${{ secrets.ALT_REPO_NAME }}
-          token: ${{ secrets.ALT_REPO_TOKEN }}
-          body_path: changelog.txt
-          tag_name: ${{ env.SPOTIFY_VERSION }}-${{ env.TWEAK_VERSION }}-LG-${{ env.TIMESTAMP }}
-          name: ${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Swift ${{ env.TWEAK_VERSION }} // Liquid Glass // Multi Upload from github.repository
           files: Outputs/IPAS/*.ipa
-
-      - name: Override changelog
-        if: ${{ inputs.changelog_changer != '' }}
-        env:
-          CUSTOM_LOG: ${{ inputs.changelog_changer }}
-        run: printf '%s\n' "$CUSTOM_LOG" > changelog.txt
-
-      - name: Upload to Telegram
-        if: ${{ inputs.upload_to_telegram }}
-        env:
-          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          TG_API_ID: ${{ secrets.TG_API_ID }}
-          TG_API_HASH: ${{ secrets.TG_API_HASH }}
-          REGULAR_IPA: ${{ steps.lg.outputs.regular_ipa }}
-          PATCHED_IPA: ${{ steps.lg.outputs.patched_ipa }}
-          CAPTION: |
-            ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }} // Liquid Glass, tweak by @compiledipas
-        run: |
-          set -eo pipefail
-          pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
-
-          cat << 'PYTHON' > upload.py
-          import os, asyncio, re
-          from telethon import TelegramClient
-          from FastTelethonhelper import fast_upload
-
-          chat_id = os.environ['TG_CHAT_ID']
-          if chat_id.lstrip('-').isdigit():
-              chat_id = int(chat_id)
-
-          async def main():
-              client = await TelegramClient(
-                  'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
-              ).start(bot_token=os.environ['TG_BOT_TOKEN'])
-
-              with open('changelog.txt', encoding='utf-8') as f:
-                  changelog = re.sub(r'^(#+)\s+(.+)$', r'**\2**', f.read(), flags=re.MULTILINE)
-
-              caption = (os.environ['CAPTION'] + "\n" + changelog)[:1024]
-
-              files = [
-                  await fast_upload(client, os.environ['REGULAR_IPA']),
-                  await fast_upload(client, os.environ['PATCHED_IPA']),
-              ]
-              await client.send_file(chat_id, files, caption=["", caption])
-              await client.disconnect()
-
-          asyncio.run(main())
-          PYTHON
-
-          python3 upload.py
-          echo "im done bitch ass, check telegram"
-
-      - name: Upload to GitHub Releases
-        if: ${{ inputs.upload_local }}
-        uses: softprops/action-gh-release@v3.0.2
-        with:
           body_path: changelog.txt
           tag_name: ${{ env.TWEAK_VERSION }}-LG-${{ env.TIMESTAMP }}
-          name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Liquid Glass // Build Timestamp ${{ env.TIMESTAMP }}
-          files: Outputs/IPAS/*.ipa
+          release_name: Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Liquid Glass // Build Timestamp ${{ env.TIMESTAMP }}
+          regular_ipa: Outputs/IPAS/${{ env.FILE_PREFIX }}-${{ env.SPOTIFY_VERSION }}-ESR-${{ env.TWEAK_VERSION }}-LG.ipa
+          patched_ipa: Outputs/IPAS/${{ env.FILE_PREFIX }}-${{ env.SPOTIFY_VERSION }}-ESR-${{ env.TWEAK_VERSION }}-LG-patched.ipa
+          caption: liquid glass version
+          append_changelog_to_caption: 'false'
+          upload_local: ${{ inputs.upload_local }}
+          upload_to_alt_repo: ${{ inputs.upload_to_alt_repo }}
+          upload_to_telegram: ${{ inputs.upload_to_telegram }}
+          github_token: ${{ github.token }}
+          alt_repo_name: ${{ secrets.ALT_REPO_NAME }}
+          alt_repo_token: ${{ secrets.ALT_REPO_TOKEN }}
+          tg_bot_token: ${{ secrets.TG_BOT_TOKEN }}
+          tg_chat_id: ${{ secrets.TG_CHAT_ID }}
+          tg_api_id: ${{ secrets.TG_API_ID }}
+          tg_api_hash: ${{ secrets.TG_API_HASH }}

@@ -1,0 +1,123 @@
+name: Publish IPAs
+description: Upload built IPAs to the ALT repo, Telegram and this repo's releases.
+
+inputs:
+  files:
+    description: Glob of ipa files to attach to releases
+    required: true
+  tag_name:
+    required: true
+  release_name:
+    required: true
+  body_path:
+    description: Release body for Telegram and this repo's releases
+    required: true
+  alt_body_path:
+    description: Release body for the ALT repo, which does not take the changelog override
+    default: ''
+  regular_ipa:
+    required: true
+  patched_ipa:
+    required: true
+  caption:
+    description: Telegram caption prefix
+    required: true
+  append_changelog_to_caption:
+    description: Append body_path contents to the Telegram caption
+    default: 'true'
+  upload_local:
+    default: 'false'
+  upload_to_alt_repo:
+    default: 'false'
+  upload_to_telegram:
+    default: 'false'
+  github_token:
+    required: true
+  alt_repo_name:
+    default: ''
+  alt_repo_token:
+    default: ''
+  tg_bot_token:
+    default: ''
+  tg_chat_id:
+    default: ''
+  tg_api_id:
+    default: ''
+  tg_api_hash:
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Upload to ALT REPO Releases
+      if: inputs.upload_to_alt_repo == 'true'
+      uses: softprops/action-gh-release@v3.0.2
+      with:
+        repository: ${{ inputs.alt_repo_name }}
+        token: ${{ inputs.alt_repo_token }}
+        body_path: ${{ inputs.alt_body_path || inputs.body_path }}
+        tag_name: ${{ inputs.tag_name }}
+        name: ${{ inputs.release_name }}
+        files: ${{ inputs.files }}
+
+    - name: Upload to Telegram
+      if: inputs.upload_to_telegram == 'true'
+      shell: bash
+      env:
+        TG_BOT_TOKEN: ${{ inputs.tg_bot_token }}
+        TG_CHAT_ID: ${{ inputs.tg_chat_id }}
+        TG_API_ID: ${{ inputs.tg_api_id }}
+        TG_API_HASH: ${{ inputs.tg_api_hash }}
+        REGULAR_IPA: ${{ inputs.regular_ipa }}
+        PATCHED_IPA: ${{ inputs.patched_ipa }}
+        CAPTION: ${{ inputs.caption }}
+        BODY_PATH: ${{ inputs.body_path }}
+        APPEND_CHANGELOG: ${{ inputs.append_changelog_to_caption }}
+      run: |
+        set -eo pipefail
+        pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
+
+        cat << 'PYTHON' > tg_upload.py
+        import os, asyncio, re
+        from telethon import TelegramClient
+        from FastTelethonhelper import fast_upload
+
+        chat_id = os.environ['TG_CHAT_ID']
+        if chat_id.lstrip('-').isdigit():
+            chat_id = int(chat_id)
+
+        def build_caption():
+            caption = os.environ['CAPTION']
+            if os.environ.get('APPEND_CHANGELOG') == 'true':
+                with open(os.environ['BODY_PATH'], encoding='utf-8') as f:
+                    body = re.sub(r'^(#+)\s+(.+)$', r'**\2**', f.read(), flags=re.MULTILINE)
+                caption = caption + "\n" + body
+            return caption[:1024]
+
+        async def main():
+            client = await TelegramClient(
+                'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
+            ).start(bot_token=os.environ['TG_BOT_TOKEN'])
+
+            files = [
+                await fast_upload(client, os.environ['REGULAR_IPA']),
+                await fast_upload(client, os.environ['PATCHED_IPA']),
+            ]
+            await client.send_file(chat_id, files, caption=["", build_caption()])
+            await client.disconnect()
+
+        asyncio.run(main())
+        PYTHON
+
+        python3 tg_upload.py
+        echo "im done bitch ass, check telegram"
+
+    - name: Upload to GitHub Releases
+      if: inputs.upload_local == 'true'
+      uses: softprops/action-gh-release@v3.0.2
+      with:
+        token: ${{ inputs.github_token }}
+        body_path: ${{ inputs.body_path }}
+        tag_name: ${{ inputs.tag_name }}
+        name: ${{ inputs.release_name }}
+        files: ${{ inputs.files }}
