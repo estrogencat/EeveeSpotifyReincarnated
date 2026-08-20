@@ -125,6 +125,14 @@
       ],
       "versions": [
         {
+          "version": "9.1.78.1717",
+          "date": "2026-08-20T07:38:31Z",
+          "size": 137865629,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-08-20-07-36-21/TestFlight-ES-9.1.78.1717-ESR-6.6.8-patched.ipa",
+          "buildVersion": "917801717",
+          "minOSVersion": "16.0"
+        },
+        {
           "version": "9.1.68",
           "date": "2026-08-02T04:52:29Z",
           "size": 132869470,
@@ -228,6 +236,14 @@
         "https://softgaypaws.com/assets/screenshots/IMG_1347.PNG"
       ],
       "versions": [
+        {
+          "version": "9.1.78.1717",
+          "date": "2026-08-20T07:38:31Z",
+          "size": 130476481,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-08-20-07-36-21/TestFlight-ES-9.1.78.1717-ESR-6.6.8.ipa",
+          "buildVersion": "917801717",
+          "minOSVersion": "16.0"
+        },
         {
           "version": "9.1.68",
           "date": "2026-08-02T04:52:29Z",
