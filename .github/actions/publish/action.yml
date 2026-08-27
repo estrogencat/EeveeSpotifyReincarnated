@@ -60,6 +60,19 @@ runs:
         name: ${{ inputs.release_name }}
         files: ${{ inputs.files }}
 
+    - name: Resolve python version for the Telegram venv
+      if: inputs.upload_to_telegram == 'true'
+      id: pyver
+      shell: bash
+      run: echo "v=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Telegram upload deps
+      if: inputs.upload_to_telegram == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/.tg-venv
+        key: tg-venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.pyver.outputs.v }}-telethon-cryptg-fasttelethon-v1
+
     - name: Upload to Telegram
       if: inputs.upload_to_telegram == 'true'
       shell: bash
@@ -75,11 +88,22 @@ runs:
         APPEND_CHANGELOG: ${{ inputs.append_changelog_to_caption }}
       run: |
         set -eo pipefail
-        pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
+        VENV="${GITHUB_WORKSPACE:?}/.tg-venv"
+
+        if "$VENV/bin/python" -c 'import telethon, cryptg, FastTelethonhelper' 2>/dev/null; then
+          echo "telegram deps restored from cache"
+        else
+          echo "building telegram venv"
+          rm -rf "$VENV"
+          python3 -m venv "$VENV"
+          "$VENV/bin/pip" install --quiet --upgrade pip
+          "$VENV/bin/pip" install --quiet telethon cryptg FastTelethonhelper
+        fi
 
         cat << 'PYTHON' > tg_upload.py
-        import os, asyncio, re
+        import os, asyncio, re, time
         from telethon import TelegramClient
+        from telethon.errors import FloodWaitError
         from FastTelethonhelper import fast_upload
 
         chat_id = os.environ['TG_CHAT_ID']
@@ -94,22 +118,35 @@ runs:
                 caption = caption + "\n" + body
             return caption[:1024]
 
+        async def upload_all(client, paths):
+            try:
+                return list(await asyncio.gather(*(fast_upload(client, p) for p in paths)))
+            except FloodWaitError as e:
+                print("flood wait %ss on parallel upload, falling back to sequential" % e.seconds)
+                await asyncio.sleep(e.seconds)
+                return [await fast_upload(client, p) for p in paths]
+
         async def main():
             client = await TelegramClient(
                 'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
             ).start(bot_token=os.environ['TG_BOT_TOKEN'])
 
-            files = [
-                await fast_upload(client, os.environ['REGULAR_IPA']),
-                await fast_upload(client, os.environ['PATCHED_IPA']),
-            ]
+            paths = [os.environ['REGULAR_IPA'], os.environ['PATCHED_IPA']]
+            total = sum(os.path.getsize(p) for p in paths)
+
+            started = time.monotonic()
+            files = await upload_all(client, paths)
+            elapsed = time.monotonic() - started
+            print("uploaded %.1f MB in %.1fs (%.2f MB/s)" % (
+                total / 1e6, elapsed, total / 1e6 / max(elapsed, 0.001)))
+
             await client.send_file(chat_id, files, caption=["", build_caption()])
             await client.disconnect()
 
         asyncio.run(main())
         PYTHON
 
-        python3 tg_upload.py
+        "$VENV/bin/python" tg_upload.py
         echo "im done bitch ass, check telegram"
 
     - name: Upload to GitHub Releases
