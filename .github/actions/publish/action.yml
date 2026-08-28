@@ -103,7 +103,6 @@ runs:
         cat << 'PYTHON' > tg_upload.py
         import os, asyncio, re, time
         from telethon import TelegramClient
-        from telethon.errors import FloodWaitError
         from FastTelethonhelper import fast_upload
 
         chat_id = os.environ['TG_CHAT_ID']
@@ -119,12 +118,15 @@ runs:
             return caption[:1024]
 
         async def upload_all(client, paths):
-            try:
-                return list(await asyncio.gather(*(fast_upload(client, p) for p in paths)))
-            except FloodWaitError as e:
-                print("flood wait %ss on parallel upload, falling back to sequential" % e.seconds)
-                await asyncio.sleep(e.seconds)
-                return [await fast_upload(client, p) for p in paths]
+            uploaded = []
+            for p in paths:
+                started = time.monotonic()
+                uploaded.append(await fast_upload(client, p))
+                size = os.path.getsize(p) / 1e6
+                took = time.monotonic() - started
+                print("  %s: %.1f MB in %.1fs (%.2f MB/s)" % (
+                    os.path.basename(p), size, took, size / max(took, 0.001)))
+            return uploaded
 
         async def main():
             client = await TelegramClient(
