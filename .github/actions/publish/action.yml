@@ -60,19 +60,6 @@ runs:
         name: ${{ inputs.release_name }}
         files: ${{ inputs.files }}
 
-    - name: Resolve python version for the Telegram venv
-      if: inputs.upload_to_telegram == 'true'
-      id: pyver
-      shell: bash
-      run: echo "v=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')" >> "$GITHUB_OUTPUT"
-
-    - name: Restore Telegram upload deps
-      if: inputs.upload_to_telegram == 'true'
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/.tg-venv
-        key: tg-venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.pyver.outputs.v }}-telethon-cryptg-fasttelethon-v1
-
     - name: Upload to Telegram
       if: inputs.upload_to_telegram == 'true'
       shell: bash
@@ -88,20 +75,10 @@ runs:
         APPEND_CHANGELOG: ${{ inputs.append_changelog_to_caption }}
       run: |
         set -eo pipefail
-        VENV="${GITHUB_WORKSPACE:?}/.tg-venv"
-
-        if "$VENV/bin/python" -c 'import telethon, cryptg, FastTelethonhelper' 2>/dev/null; then
-          echo "telegram deps restored from cache"
-        else
-          echo "building telegram venv"
-          rm -rf "$VENV"
-          python3 -m venv "$VENV"
-          "$VENV/bin/pip" install --quiet --upgrade pip
-          "$VENV/bin/pip" install --quiet telethon cryptg FastTelethonhelper
-        fi
+        pip3 install --quiet telethon cryptg FastTelethonhelper --break-system-packages
 
         cat << 'PYTHON' > tg_upload.py
-        import os, asyncio, re, time
+        import os, asyncio, re
         from telethon import TelegramClient
         from FastTelethonhelper import fast_upload
 
@@ -117,38 +94,22 @@ runs:
                 caption = caption + "\n" + body
             return caption[:1024]
 
-        async def upload_all(client, paths):
-            uploaded = []
-            for p in paths:
-                started = time.monotonic()
-                uploaded.append(await fast_upload(client, p))
-                size = os.path.getsize(p) / 1e6
-                took = time.monotonic() - started
-                print("  %s: %.1f MB in %.1fs (%.2f MB/s)" % (
-                    os.path.basename(p), size, took, size / max(took, 0.001)))
-            return uploaded
-
         async def main():
             client = await TelegramClient(
                 'bot_session', int(os.environ['TG_API_ID']), os.environ['TG_API_HASH']
             ).start(bot_token=os.environ['TG_BOT_TOKEN'])
 
-            paths = [os.environ['REGULAR_IPA'], os.environ['PATCHED_IPA']]
-            total = sum(os.path.getsize(p) for p in paths)
-
-            started = time.monotonic()
-            files = await upload_all(client, paths)
-            elapsed = time.monotonic() - started
-            print("uploaded %.1f MB in %.1fs (%.2f MB/s)" % (
-                total / 1e6, elapsed, total / 1e6 / max(elapsed, 0.001)))
-
+            files = [
+                await fast_upload(client, os.environ['REGULAR_IPA']),
+                await fast_upload(client, os.environ['PATCHED_IPA']),
+            ]
             await client.send_file(chat_id, files, caption=["", build_caption()])
             await client.disconnect()
 
         asyncio.run(main())
         PYTHON
 
-        "$VENV/bin/python" tg_upload.py
+        python3 tg_upload.py
         echo "im done bitch ass, check telegram"
 
     - name: Upload to GitHub Releases
