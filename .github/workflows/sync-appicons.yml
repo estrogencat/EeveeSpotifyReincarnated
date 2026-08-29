@@ -1,0 +1,109 @@
+name: Sync app icons from upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-appicons
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: https://github.com/SideloadLabs/EeveeSpotifyReincarnated
+  ICON_DIR: Assets/AppIcon
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: Master
+
+      - name: Fetch upstream icons
+        run: |
+          set -eo pipefail
+          UP="${RUNNER_TEMP:?}/upstream"
+          rm -rf "$UP"
+          git clone --depth 1 --filter=blob:none --sparse --no-tags "$UPSTREAM_REPO" "$UP"
+          git -C "$UP" sparse-checkout set "$ICON_DIR"
+          [ -d "$UP/$ICON_DIR" ] || { echo "::error::upstream has no $ICON_DIR"; exit 1; }
+          echo "upstream icon files: $(find "$UP/$ICON_DIR" -type f | wc -l)"
+
+      - name: Copy icons we do not already have
+        id: copy
+        run: |
+          set -eo pipefail
+          UP="${RUNNER_TEMP:?}/upstream/$ICON_DIR"
+          added=0
+          kept=0
+          ignored=0
+          : > /tmp/added.txt
+
+          while IFS= read -r -d '' src; do
+            rel="${src#"$UP/"}"
+            case "${rel,,}" in
+              *.png|*.jpg|*.jpeg) ;;
+              *) echo "ignoring non-image $rel"; ignored=$(( ignored + 1 )); continue ;;
+            esac
+
+            dest="$ICON_DIR/$rel"
+            if [ -e "$dest" ]; then
+              kept=$(( kept + 1 ))
+            else
+              mkdir -p "$(dirname "$dest")"
+              cp "$src" "$dest"
+              echo "$rel" >> /tmp/added.txt
+              added=$(( added + 1 ))
+            fi
+          done < <(find "$UP" -type f -print0)
+
+          echo "added $added, kept $kept existing, ignored $ignored"
+          echo "added=$added" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### App icon sync"
+            echo ""
+            echo "- added: **$added**"
+            echo "- already had: $kept"
+            if [ "$added" -gt 0 ]; then
+              echo ""
+              echo '```'
+              cat /tmp/added.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit new icons
+        if: steps.copy.outputs.added != '0'
+        run: |
+          set -eo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$ICON_DIR"
+
+          if git diff --cached --quiet; then
+            echo "nothing staged"
+            exit 0
+          fi
+
+          if git diff --cached --name-status | grep -qv '^A'; then
+            echo "::error::refusing to push, staged changes are not all additions"
+            git diff --cached --name-status
+            exit 1
+          fi
+
+          git commit -m "chore: add new upstream app icons [skip ci]"
+
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin Master && git push origin Master && exit 0
+            echo "push attempt $i lost a race, retrying"
+            sleep $(( RANDOM % 5 + 3 ))
+          done
+          echo "::error::could not push new icons after 5 attempts"
+          exit 1
