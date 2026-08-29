@@ -14,9 +14,9 @@ on:
         required: true
         type: string
       protected_paths:
-        description: "Space separated paths kept at our version"
-        default: ".github Assets/AppIcon"
-        required: true
+        description: "Extra space separated paths kept at our version (.github is always protected)"
+        default: "Assets/AppIcon"
+        required: false
         type: string
       dry_run:
         description: "Report what would change without pushing"
@@ -46,9 +46,12 @@ jobs:
         env:
           UPSTREAM_REPO: ${{ inputs.upstream_repo }}
           UPSTREAM_REF: ${{ inputs.upstream_ref }}
-          PROTECTED: ${{ inputs.protected_paths }}
+          EXTRA_PROTECTED: ${{ inputs.protected_paths }}
         run: |
           set -eo pipefail
+
+          PROTECTED=$(printf '%s\n' .github $EXTRA_PROTECTED | awk 'NF && !seen[$0]++' | tr '\n' ' ')
+          echo "protected paths: $PROTECTED"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -118,13 +121,22 @@ jobs:
           echo "merged=1" >> "$GITHUB_OUTPUT"
 
           for p in $PROTECTED; do
-            if ! git diff --quiet "$PRE_MERGE" HEAD -- "$p"; then
+            before=$(git rev-parse "$PRE_MERGE:$p" 2>/dev/null || echo absent)
+            after=$(git rev-parse "HEAD:$p" 2>/dev/null || echo absent)
+            if [ "$before" != "$after" ]; then
               echo "::error::protected path $p was modified by the merge"
               git diff --stat "$PRE_MERGE" HEAD -- "$p"
               exit 1
             fi
-            echo "verified $p is unchanged"
+            echo "verified $p unchanged ($before)"
           done
+
+          if git diff --name-only "$PRE_MERGE" HEAD | grep -q '^\.github/'; then
+            echo "::error::merge touched .github, refusing to continue"
+            git diff --name-only "$PRE_MERGE" HEAD -- .github
+            exit 1
+          fi
+          echo "confirmed .github is untouched"
 
           git diff --stat "$PRE_MERGE" HEAD > /tmp/changed.txt
 
