@@ -1,0 +1,172 @@
+name: Sync changes from upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: "Upstream repository URL"
+        default: "https://github.com/SideloadLabs/EeveeSpotifyReincarnated"
+        required: true
+        type: string
+      upstream_ref:
+        description: "Upstream branch to merge"
+        default: "Master"
+        required: true
+        type: string
+      protected_paths:
+        description: "Space separated paths kept at our version"
+        default: ".github Assets/AppIcon"
+        required: true
+        type: string
+      dry_run:
+        description: "Report what would change without pushing"
+        default: false
+        required: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: Master
+          fetch-depth: 0
+
+      - name: Merge upstream, keeping protected paths
+        id: merge
+        env:
+          UPSTREAM_REPO: ${{ inputs.upstream_repo }}
+          UPSTREAM_REF: ${{ inputs.upstream_ref }}
+          PROTECTED: ${{ inputs.protected_paths }}
+        run: |
+          set -eo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || git remote set-url upstream "$UPSTREAM_REPO"
+          git fetch --no-tags upstream "$UPSTREAM_REF"
+
+          PRE_MERGE=$(git rev-parse HEAD)
+          echo "pre_merge=$PRE_MERGE" >> "$GITHUB_OUTPUT"
+
+          BEHIND=$(git rev-list --count "HEAD..upstream/$UPSTREAM_REF")
+          echo "upstream commits not in Master: $BEHIND"
+          if [ "$BEHIND" -eq 0 ]; then
+            echo "already up to date"
+            echo "merged=0" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Upstream sync"
+              echo ""
+              echo "Already up to date with \`$UPSTREAM_REF\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git log --oneline "HEAD..upstream/$UPSTREAM_REF" > /tmp/incoming.txt
+
+          git merge --no-commit --no-ff "upstream/$UPSTREAM_REF" || true
+
+          for p in $PROTECTED; do
+            echo "restoring $p to our version"
+            git checkout "$PRE_MERGE" -- "$p" 2>/dev/null || true
+
+            comm -13 \
+              <(git ls-tree -r --name-only "$PRE_MERGE" -- "$p" | sort) \
+              <(git ls-files --cached -- "$p" | sort) \
+            | while IFS= read -r f; do
+                [ -n "$f" ] || continue
+                echo "  dropping upstream-added $f"
+                git rm -q --cached --force -- "$f"
+                rm -f -- "$f"
+              done
+          done
+
+          UNRESOLVED=$(git diff --name-only --diff-filter=U || true)
+          if [ -n "$UNRESOLVED" ]; then
+            echo "::error::conflicts outside protected paths, resolve this merge locally"
+            echo "$UNRESOLVED"
+            {
+              echo "### Upstream sync failed"
+              echo ""
+              echo "Conflicts outside protected paths:"
+              echo '```'
+              echo "$UNRESOLVED"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            git merge --abort || true
+            exit 1
+          fi
+
+          if git diff --cached --quiet && git diff --quiet; then
+            echo "nothing to merge once protected paths were restored"
+            git merge --abort || true
+            echo "merged=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -q -m "Merge upstream $UPSTREAM_REF"
+          echo "merged=1" >> "$GITHUB_OUTPUT"
+
+          for p in $PROTECTED; do
+            if ! git diff --quiet "$PRE_MERGE" HEAD -- "$p"; then
+              echo "::error::protected path $p was modified by the merge"
+              git diff --stat "$PRE_MERGE" HEAD -- "$p"
+              exit 1
+            fi
+            echo "verified $p is unchanged"
+          done
+
+          git diff --stat "$PRE_MERGE" HEAD > /tmp/changed.txt
+
+          {
+            echo "### Upstream sync"
+            echo ""
+            echo "Merged **$BEHIND** commits from \`$UPSTREAM_REF\`."
+            echo ""
+            echo "Protected and left untouched: \`$PROTECTED\`"
+            echo ""
+            echo "<details><summary>Incoming commits</summary>"
+            echo ""
+            echo '```'
+            cat /tmp/incoming.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+            echo ""
+            echo "<details><summary>Files changed</summary>"
+            echo ""
+            echo '```'
+            cat /tmp/changed.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push merge
+        if: steps.merge.outputs.merged == '1' && !inputs.dry_run
+        run: |
+          set -eo pipefail
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin Master && git push origin Master && exit 0
+            echo "push attempt $i lost a race, retrying"
+            sleep $(( RANDOM % 5 + 3 ))
+          done
+          echo "::error::could not push merge after 5 attempts"
+          exit 1
+
+      - name: Dry run notice
+        if: steps.merge.outputs.merged == '1' && inputs.dry_run
+        run: |
+          echo "dry run, not pushing"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Dry run, nothing was pushed." >> "$GITHUB_STEP_SUMMARY"
