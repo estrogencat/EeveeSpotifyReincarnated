@@ -168,11 +168,31 @@ jobs:
         if: steps.merge.outputs.merged == '1' && !inputs.dry_run
         run: |
           set -eo pipefail
+
           for i in 1 2 3 4 5; do
-            git pull --rebase --autostash origin Master && git push origin Master && exit 0
-            echo "push attempt $i lost a race, retrying"
+            if git push origin Master; then
+              echo "pushed"
+              exit 0
+            fi
+
+            echo "push rejected, integrating remote Master (attempt $i)"
+            git fetch --no-tags origin Master
+
+            if ! git merge --no-edit FETCH_HEAD; then
+              git merge --abort || true
+              echo "::error::remote Master conflicts with this merge, resolve locally"
+              exit 1
+            fi
+
+            if ! git diff --quiet FETCH_HEAD HEAD -- .github; then
+              echo "::error::.github differs from remote after integrating, refusing to push"
+              git diff --name-only FETCH_HEAD HEAD -- .github
+              exit 1
+            fi
+
             sleep $(( RANDOM % 5 + 3 ))
           done
+
           echo "::error::could not push merge after 5 attempts"
           exit 1
 

@@ -101,8 +101,18 @@ jobs:
           git commit -m "chore: add new upstream app icons [skip ci]"
 
           for i in 1 2 3 4 5; do
-            git pull --rebase --autostash origin Master && git push origin Master && exit 0
-            echo "push attempt $i lost a race, retrying"
+            if git push origin Master; then
+              echo "pushed"
+              exit 0
+            fi
+
+            echo "push rejected, rebasing onto remote Master (attempt $i)"
+            if ! git pull --rebase --autostash origin Master; then
+              git rebase --abort || true
+              echo "::error::could not rebase onto remote Master, resolve locally"
+              exit 1
+            fi
+
             sleep $(( RANDOM % 5 + 3 ))
           done
           echo "::error::could not push new icons after 5 attempts"
