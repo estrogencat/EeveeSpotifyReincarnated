@@ -14,7 +14,6 @@
     {
       "name": "Spotify Liquid Glass patched",
       "bundleIdentifier": "com.spotify.client.lgpatched",
-      "marketplaceID": "",
       "developerName": "estrogencat",
       "subtitle": "Patched variant // Only works with iOS 26+",
       "localizedDescription": "Patched stable spotify, use with paid certificate.",
@@ -82,7 +81,6 @@
     {
       "name": "Spotify Liquid Glass",
       "bundleIdentifier": "com.spotify.client.lg",
-      "marketplaceID": "",
       "developerName": "estrogencat",
       "subtitle": "Only works with iOS 26+ // This tweak makes Spotify think you have a Premium subscription, granting free listening, just like Spotilife, and provides some additional features like custom lyrics.",
       "localizedDescription": "Regular Stable Spotify, use with AltStore/SideStore.",
