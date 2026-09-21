@@ -443,6 +443,14 @@
       ],
       "versions": [
         {
+          "version": "9.1.84",
+          "date": "2026-09-21T06:14:48Z",
+          "size": 142323456,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-09-21-06-12-20/EeveeSpotify-9.1.84-ESR-6.6.8-patched.ipa",
+          "buildVersion": "918402223",
+          "minOSVersion": "16.0"
+        },
+        {
           "version": "9.1.82",
           "date": "2026-09-14T15:13:31Z",
           "size": 140787380,
@@ -586,6 +594,14 @@
         "https://softgaypaws.com/assets/screenshots/IMG_1347.PNG"
       ],
       "versions": [
+        {
+          "version": "9.1.84",
+          "date": "2026-09-21T06:14:48Z",
+          "size": 134677284,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-09-21-06-12-20/EeveeSpotify-9.1.84-ESR-6.6.8.ipa",
+          "buildVersion": "918402223",
+          "minOSVersion": "16.0"
+        },
         {
           "version": "9.1.82",
           "date": "2026-09-14T15:13:31Z",
