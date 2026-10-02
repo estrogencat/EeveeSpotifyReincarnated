@@ -460,9 +460,9 @@
       "versions": [
         {
           "version": "9.1.84",
-          "date": "2026-09-21T06:14:48Z",
-          "size": 142323456,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-09-21-06-12-20/EeveeSpotify-9.1.84-ESR-6.6.8-patched.ipa",
+          "date": "2026-10-02T19:35:44Z",
+          "size": 142294268,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-10-02-19-33-00/EeveeSpotify-9.1.84-ESR-6.6.8-patched.ipa",
           "buildVersion": "918402223",
           "minOSVersion": "16.0"
         },
@@ -612,9 +612,9 @@
       "versions": [
         {
           "version": "9.1.84",
-          "date": "2026-09-21T06:14:48Z",
-          "size": 134677284,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-09-21-06-12-20/EeveeSpotify-9.1.84-ESR-6.6.8.ipa",
+          "date": "2026-10-02T19:35:44Z",
+          "size": 134648096,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/6.6.8-2026-10-02-19-33-00/EeveeSpotify-9.1.84-ESR-6.6.8.ipa",
           "buildVersion": "918402223",
           "minOSVersion": "16.0"
         },
