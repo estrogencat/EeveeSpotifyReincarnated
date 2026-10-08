@@ -23,6 +23,14 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "9.1.88",
+          "date": "2026-10-08T23:44:08Z",
+          "size": 141244686,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/7.0.0-LG-2026-10-09-00-00-00/EeveeSpotify-9.1.88-ESR-7.0.0-LG-patched.ipa",
+          "buildVersion": "918800000",
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "9.1.86",
           "date": "2026-10-05T05:10:28Z",
           "size": 141024883,
@@ -121,6 +129,14 @@
       "category": "other",
       "screenshots": [],
       "versions": [
+        {
+          "version": "9.1.88",
+          "date": "2026-10-08T23:44:08Z",
+          "size": 133834940,
+          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/7.0.0-LG-2026-10-09-00-00-00/EeveeSpotify-9.1.88-ESR-7.0.0-LG.ipa",
+          "buildVersion": "918800000",
+          "minOSVersion": "26.0"
+        },
         {
           "version": "9.1.86",
           "date": "2026-10-05T05:10:28Z",
@@ -752,14 +768,6 @@
           "size": 99599686,
           "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.22-new/JailbreakOnly.EeveeSpotify-9.1.22-Swift-6.5.3.ipa",
           "buildVersion": "912200000",
-          "minOSVersion": "16.0"
-        },
-        {
-          "version": "9.1.12",
-          "date": "2026-01-15T20:05:31Z",
-          "size": 89697212,
-          "downloadURL": "https://github.com/estrogencat/EeveeIPA/releases/download/9.1.12-new/EeveeSpotify-9.1.12-Swift-6.5.0.ipa",
-          "buildVersion": "911200000",
           "minOSVersion": "16.0"
         }
       ],
