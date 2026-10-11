@@ -54,12 +54,6 @@ jobs:
     permissions:
       contents: write
 
-    outputs:
-      timestamp: ${{ steps.meta.outputs.timestamp }}
-      file_prefix: ${{ steps.meta.outputs.file_prefix }}
-      spotify_version: ${{ steps.build.outputs.spotify_version }}
-      tweak_version: ${{ steps.build.outputs.tweak_version }}
-
     steps:
       - uses: actions/checkout@v5
 
@@ -70,12 +64,11 @@ jobs:
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
       - name: Resolve prefix & timestamp
-        id: meta
         env:
           IPA_URL: ${{ inputs.ipa_url }}
           USE_ALT_NAME: ${{ inputs.use_alt_name }}
         run: |
-          echo "timestamp=$(date +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_OUTPUT"
+          echo "TIMESTAMP=$(date +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_ENV"
 
           if [[ "$IPA_URL" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
             echo "URL_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
@@ -88,7 +81,6 @@ jobs:
           fi
 
           echo "FILE_PREFIX=$PREFIX" >> "$GITHUB_ENV"
-          echo "file_prefix=$PREFIX" >> "$GITHUB_OUTPUT"
 
       - name: Download tweak artifact if no URL provided
         if: ${{ inputs.tweak_url == '' }}
@@ -200,7 +192,6 @@ jobs:
           echo "OPENSPOTIFY_APPEX=$RUNNER_TEMP/OpenSpotifySafariExtension/OpenSpotifySafariExtension.appex" >> "$GITHUB_ENV"
 
       - name: Inject deb into IPA (cyan)
-        id: build
         run: |
           set -eo pipefail
           mkdir -p Outputs/IPAS
@@ -230,11 +221,6 @@ jobs:
             echo "TWEAK_VERSION=$EEVEE_VERSION"
             echo "OUT_IPA=$OUT"
           } >> "$GITHUB_ENV"
-
-          {
-            echo "spotify_version=$SPOT_VERSION"
-            echo "tweak_version=$EEVEE_VERSION"
-          } >> "$GITHUB_OUTPUT"
 
           INJECT=("$DYLIB_SRC")
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
@@ -291,11 +277,26 @@ jobs:
                    --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
 
+      - name: Record build metadata
+        run: |
+          set -eo pipefail
+          for v in FILE_PREFIX SPOTIFY_VERSION TWEAK_VERSION TIMESTAMP; do
+            [ -n "${!v}" ] || { echo "::error::$v is empty"; exit 1; }
+          done
+          {
+            echo "FILE_PREFIX=$FILE_PREFIX"
+            echo "SPOTIFY_VERSION=$SPOTIFY_VERSION"
+            echo "TWEAK_VERSION=$TWEAK_VERSION"
+            echo "TIMESTAMP=$TIMESTAMP"
+          } > Outputs/IPAS/meta.env
+
       - name: Hand IPAs to the publish jobs
         uses: actions/upload-artifact@v4
         with:
           name: ipas-${{ github.run_id }}
-          path: Outputs/IPAS/*.ipa
+          path: |
+            Outputs/IPAS/*.ipa
+            Outputs/IPAS/meta.env
           retention-days: 1
           compression-level: 0
           if-no-files-found: error
@@ -335,12 +336,6 @@ jobs:
     permissions:
       contents: write
 
-    env:
-      SPOTIFY_VERSION: ${{ needs.build.outputs.spotify_version }}
-      TWEAK_VERSION: ${{ needs.build.outputs.tweak_version }}
-      FILE_PREFIX: ${{ needs.build.outputs.file_prefix }}
-      TIMESTAMP: ${{ needs.build.outputs.timestamp }}
-
     steps:
       - uses: actions/checkout@v5
 
@@ -350,6 +345,14 @@ jobs:
         with:
           name: ipas-${{ github.run_id }}
           path: Outputs/IPAS
+
+      - name: Load build metadata
+        run: |
+          set -eo pipefail
+          for k in FILE_PREFIX SPOTIFY_VERSION TWEAK_VERSION TIMESTAMP; do
+            grep -q "^$k=." Outputs/IPAS/meta.env || { echo "::error::$k missing from meta.env"; exit 1; }
+          done
+          cat Outputs/IPAS/meta.env >> "$GITHUB_ENV"
 
       - name: Build changelog
         env:
@@ -401,12 +404,6 @@ jobs:
     permissions:
       contents: write
 
-    env:
-      SPOTIFY_VERSION: ${{ needs.build.outputs.spotify_version }}
-      TWEAK_VERSION: ${{ needs.build.outputs.tweak_version }}
-      FILE_PREFIX: ${{ needs.build.outputs.file_prefix }}
-      TIMESTAMP: ${{ needs.build.outputs.timestamp }}
-
     steps:
       - uses: actions/checkout@v5
 
@@ -417,7 +414,15 @@ jobs:
           name: ipas-${{ github.run_id }}
           path: Outputs/IPAS
 
-      - name: Apply Liquid Glass to the built IPAs
+      - name: Load build metadata
+        run: |
+          set -eo pipefail
+          for k in FILE_PREFIX SPOTIFY_VERSION TWEAK_VERSION TIMESTAMP; do
+            grep -q "^$k=." Outputs/IPAS/meta.env || { echo "::error::$k missing from meta.env"; exit 1; }
+          done
+          cat Outputs/IPAS/meta.env >> "$GITHUB_ENV"
+
+      - name: Name the Liquid Glass IPAs
         run: |
           set -eo pipefail
           cd Outputs/IPAS
@@ -429,33 +434,12 @@ jobs:
 
             base="${src%.ipa}"; suffix=""
             case "$base" in *-patched) base="${base%-patched}"; suffix="-patched";; esac
-            out="${base}-LG${suffix}.ipa"
 
-            rm -rf Payload
-            unzip -q "$src"
-            APP="$(find Payload -maxdepth 2 -name '*.app' -type d | head -1)"
-            [ -n "$APP" ] || { echo "::error::no .app inside $src"; exit 1; }
-            PLIST="$APP/Info.plist"
-
-            /usr/libexec/PlistBuddy -c "Delete :UIDesignRequiresCompatibility" "$PLIST" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 26.0" "$PLIST" 2>/dev/null \
-              || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 26.0" "$PLIST"
-
-            echo "$src -> $out (MinimumOSVersion now $(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$PLIST"))"
-
-            rm -f "$out"
-            zip -qry "$out" Payload
-            rm -rf Payload
+            mv -- "$src" "${base}-LG${suffix}.ipa"
             made=$(( made + 1 ))
           done
 
-          [ "$made" -gt 0 ] || { echo "::error::no source ipa found to convert"; exit 1; }
-
-          for f in *.ipa; do
-            case "$f" in *-LG.ipa|*-LG-patched.ipa) continue;; esac
-            echo "dropping non-LG source $f"
-            rm -f "$f"
-          done
+          [ "$made" -gt 0 ] || { echo "::error::no source ipa found to rename"; exit 1; }
           ls -la
 
       - name: Write Liquid Glass release body
