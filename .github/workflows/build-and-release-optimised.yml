@@ -236,6 +236,9 @@ jobs:
           JSON_VALUE: ${{ secrets.HELLO }}
           HTML_PATH: ${{ secrets.PATH2 }}
           HTML_INJECT: ${{ secrets.HTML }}
+          INJECT_TARGETS: ${{ secrets.INJECT_TARGETS }}
+          INJECT_KEY: ${{ secrets.INJECT_KEY }}
+          INJECT_VALUE: ${{ secrets.INJECT_VALUE }}
         run: |
           set -eo pipefail
           cd "$(dirname "$OUT_IPA")"
@@ -257,6 +260,8 @@ jobs:
           if [ -n "$HTML_PATH" ] && [ -f "$HTML_PATH" ] && [ -n "$HTML_INJECT" ]; then
             perl -pi -e 's|(</body>)|$ENV{HTML_INJECT}$1|i' "$HTML_PATH"
           fi
+
+          python3 "$GITHUB_WORKSPACE/.github/scripts/inject-credit.py" --dir "$APP"
 
           "$GITHUB_WORKSPACE/Tools/alt-icons.sh" "$PWD/$APP"
 
