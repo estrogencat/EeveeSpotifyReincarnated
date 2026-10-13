@@ -337,6 +337,7 @@ jobs:
 
   publish:
     needs: build
+    if: ${{ !inputs.build_liquid_glass }}
     runs-on: macos-latest
     permissions:
       contents: write
