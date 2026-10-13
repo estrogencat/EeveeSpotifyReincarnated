@@ -261,7 +261,7 @@ jobs:
             perl -pi -e 's|(</body>)|$ENV{HTML_INJECT}$1|i' "$HTML_PATH"
           fi
 
-          python3 "$GITHUB_WORKSPACE/.github/scripts/inject-credit.py" --dir "$APP"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/inject-credit.py" --dir "$APP" || echo "::warning::credit injection could not run, continuing without it"
 
           "$GITHUB_WORKSPACE/Tools/alt-icons.sh" "$PWD/$APP"
 
