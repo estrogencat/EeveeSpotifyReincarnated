@@ -45,12 +45,13 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          cache-dependency-path: Tools/ios15/requirements.txt
 
       - name: Install build deps
         run: |
           set -eo pipefail
           python3 -m pip install --quiet --upgrade pip
-          python3 -m pip install --quiet lief capstone ziglang
+          python3 -m pip install --quiet -r Tools/ios15/requirements.txt
           python3 -c "import lief, capstone; print('lief', lief.__version__, '| capstone', capstone.__version__)"
           python3 -m ziglang version
 

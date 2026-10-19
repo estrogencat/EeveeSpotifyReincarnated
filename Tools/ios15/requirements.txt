@@ -1,0 +1,7 @@
+# Pinned on purpose. The patcher is expected to produce a byte-identical binary
+# from the same input, and ziglang IS the compiler for the shim, so an unpinned
+# bump would silently change libshim.dylib. These are the versions that produced
+# the verified output; bump them deliberately and re-check the binary.
+lief==1.0.0
+capstone==5.0.9
+ziglang==0.16.0
