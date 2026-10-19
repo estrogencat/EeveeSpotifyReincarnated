@@ -1,0 +1,480 @@
+name: "[EXPERIMENTAL] iOS 15 shim IPA - DO NOT USE for normal builds"
+
+# A duplicate of build-and-release-optimised.yml, for the ios 15 shim-patched IPA only.
+# Differences from the normal workflow, all deliberate:
+#   1. zxPluginsInject is injected with cyan, NOT ipapatch. ipapatch corrupts the
+#      mach-o header on an already-patched binary: it writes a bogus load command
+#      (cmd=0x00050000, cmdsize=0x10000) over the tail of the command stream and sets
+#      ncmds higher than the number of commands that actually parse (150 vs 106), so
+#      dyld rejects the image at exec. The app then dies with no crash report, no log
+#      and no process. cyan already injects EeveeSpotify into the same binary without
+#      trouble, so it is used for both.
+#   2. A "Validate mach-o load commands" gate fails the build if either IPA's header
+#      is malformed. This is the check that would have caught the above in CI.
+#   3. No "Write SpotifyVersionPacked to build version file" step. That one commits and
+#      pushes to the shared build / build_testflight file, which must never happen from
+#      an experimental run.
+#   4. No Liquid Glass job. An iOS 26 variant is meaningless for an iOS 15 build.
+#   5. Every publishing input defaults to false, and the tag and release names carry an
+#      EXPERIMENTAL marker, so a run cannot quietly land in the normal channels.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: "URL to the iOS 15 SHIM-PATCHED IPA (not a stock decrypted one)"
+        default: ""
+        required: true
+        type: string
+      tweak_url:
+        description: "URL to .deb"
+        default: ""
+        required: false
+        type: string
+      use_alt_name:
+        description: "Append TestFlight prefix?"
+        default: false
+        required: true
+        type: boolean
+      upload_local:
+        description: "Publish a GitHub release (leave off unless you mean it)"
+        default: false
+        required: true
+        type: boolean
+      upload_to_alt_repo:
+        description: "Multi Upload (leave off unless you mean it)"
+        default: false
+        required: true
+        type: boolean
+      upload_to_telegram:
+        description: "Upload to Telegram channel (leave off unless you mean it)"
+        default: false
+        required: true
+        type: boolean
+      changelog_changer:
+        description: "Put the changelog here, this only edits the telegram changelog"
+        default: ""
+        required: false
+        type: string
+
+concurrency:
+  group: ios15-shim-experimental
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.1.1'
+
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - name: Resolve prefix & timestamp
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+          USE_ALT_NAME: ${{ inputs.use_alt_name }}
+        run: |
+          echo "TIMESTAMP=$(date +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_ENV"
+
+          if [[ "$IPA_URL" =~ ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            echo "URL_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+            PREFIX=TestFlight-ES-iOS15
+            echo "found testflight version in url: ${BASH_REMATCH[1]}"
+          elif [ "$USE_ALT_NAME" = "true" ]; then
+            PREFIX=TestFlight-ES-iOS15
+          else
+            PREFIX=EeveeSpotify-iOS15
+          fi
+
+          echo "FILE_PREFIX=$PREFIX" >> "$GITHUB_ENV"
+
+      - name: Download tweak artifact if no URL provided
+        if: ${{ inputs.tweak_url == '' }}
+        uses: dawidd6/action-download-artifact@v23
+        with:
+          github_token: ${{ secrets.PAT }}
+          repo: SideloadLabs/EeveeSpotifyReincarnated
+          workflow_search: true
+          workflow_conclusion: success
+          name: (EeveeSpotify-rootless-DEB|EeveeSpotify-DEBS|com\.eevee\.spotify_.*_iphoneos-arm64\.deb)
+          name_is_regexp: true
+          path: ${{ github.workspace }}/artifact-temp
+
+      - name: Prepare downloaded artifact
+        if: ${{ inputs.tweak_url == '' }}
+        run: |
+          pick() { find "$GITHUB_WORKSPACE/artifact-temp" -type f -name "$1" ! -name "*roothide*" | head -n 1; }
+          DEB_FILE=$(pick "*_iphoneos-arm64.deb")
+          [ -n "$DEB_FILE" ] || DEB_FILE=$(pick "*arm64.deb")
+          [ -n "$DEB_FILE" ] || DEB_FILE=$(pick "*.deb")
+
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::could not find a usable rootless .deb in the downloaded artifact! ;w;"
+            ls -R "$GITHUB_WORKSPACE/artifact-temp"
+            exit 1
+          fi
+          echo "using $DEB_FILE"
+
+          mv "$DEB_FILE" "$GITHUB_WORKSPACE/eevee.deb"
+          rm -rf "$GITHUB_WORKSPACE/artifact-temp"
+
+      - name: Fetch assets & install tools (parallel)
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+          TWEAK_URL: ${{ inputs.tweak_url }}
+          DYLIB_URL: ${{ secrets.DYLIB }}
+        run: |
+          set -eo pipefail
+          JOBS="$RUNNER_TEMP/jobs"; : > "$JOBS"
+
+          bg() {
+            local name="$1"; shift
+            ( "$@" ) > "$RUNNER_TEMP/$name.log" 2>&1 &
+            echo "$! $name" >> "$JOBS"
+          }
+
+          get() { curl -fL --retry 3 --retry-delay 2 --retry-all-errors -o "$1" "$2"; }
+
+          check_mime() {
+            local got; got=$(file --mime-type -b "$1")
+            for want in "${@:2}"; do [ "$got" = "$want" ] && return 0; done
+            echo "::error::$1 has unexpected type: $got"; return 1
+          }
+
+          fetch_ipa() {
+            get "$GITHUB_WORKSPACE/spotify.ipa" "$IPA_URL"
+            check_mime "$GITHUB_WORKSPACE/spotify.ipa" application/x-ios-app application/zip
+          }
+
+          fetch_deb() {
+            [ -n "$TWEAK_URL" ] || return 0
+            get "$GITHUB_WORKSPACE/eevee.deb" "$TWEAK_URL"
+            check_mime "$GITHUB_WORKSPACE/eevee.deb" application/vnd.debian.binary-package
+          }
+
+          fetch_dylib() {
+            mkdir -p "$GITHUB_WORKSPACE/extra_dylibs"
+            get "$GITHUB_WORKSPACE/extra_dylibs/zxPluginsInject.dylib" "$DYLIB_URL"
+          }
+
+          fetch_appex() {
+            local dir="$RUNNER_TEMP/OpenSpotifySafariExtension"
+            rm -rf "$dir"
+            git clone --depth 1 --no-tags \
+              https://github.com/BillyCurtis/OpenSpotifySafariExtension.git "$dir"
+            [ -e "$dir/OpenSpotifySafariExtension.appex" ]
+          }
+
+          # no ipapatch here on purpose - see the header comment
+          install_tools() {
+            brew install --quiet dpkg
+            python3 -m pip install --quiet --upgrade --break-system-packages \
+              git+https://github.com/asdfzxcvbn/pyzule-rw.git
+          }
+
+          bg ipa    fetch_ipa
+          bg deb    fetch_deb
+          bg dylib  fetch_dylib
+          bg appex  fetch_appex
+          bg tools  install_tools
+
+          failed=0
+          while read -r pid name; do
+            if wait "$pid"; then
+              echo "::group::$name ok"
+            else
+              echo "::group::$name FAILED"; failed=1
+            fi
+            cat "$RUNNER_TEMP/$name.log"
+            echo "::endgroup::"
+          done < "$JOBS"
+
+          [ "$failed" -eq 0 ] || { echo "::error::one or more fetch/install jobs failed"; exit 1; }
+          echo "OPENSPOTIFY_APPEX=$RUNNER_TEMP/OpenSpotifySafariExtension/OpenSpotifySafariExtension.appex" >> "$GITHUB_ENV"
+
+      - name: Write the mach-o header validator
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          cat << 'PYEOF' > "$RUNNER_TEMP/tools/check_macho.py"
+          """Fail if an IPA's main executable has a load-command stream dyld would reject.
+
+          This exists because ipapatch produced exactly that on an already-patched
+          binary: a bogus load command (0x00050000, size 0x10000) swallowing the tail of
+          the stream, and ncmds=150 when only 106 commands parse. dyld walks ncmds
+          commands, runs into zero padding, finds cmdsize==0 and refuses the image, so
+          the app is SIGKILLed at exec with no crash report at all.
+          """
+          import struct
+          import sys
+          import zipfile
+
+          LC_CODE_SIGNATURE = 0x1D
+
+
+          def main(path):
+              z = zipfile.ZipFile(path)
+              mains = []
+              for n in z.namelist():
+                  p = n.split("/")
+                  if len(p) == 3 and p[0] == "Payload" and p[1].endswith(".app") \
+                          and p[2] == p[1][:-4]:
+                      mains.append(n)
+              if not mains:
+                  print("::error::%s has no Payload/<App>.app/<App> executable" % path)
+                  return 1
+
+              rc = 0
+              for name in mains:
+                  info = z.getinfo(name)
+                  with z.open(name) as f:
+                      d = f.read(2 << 20)
+                  magic, _cpu, _sub, _ft, ncmds, szcmds, _fl, _r = struct.unpack_from("<8I", d, 0)
+                  if magic != 0xFEEDFACF:
+                      print("::error::%s: %s is not a thin arm64 mach-o (magic %#x)"
+                            % (path, name, magic))
+                      rc = 1
+                      continue
+
+                  print("%s: %s  ncmds=%d sizeofcmds=%#x size=%d"
+                        % (path, name, ncmds, szcmds, info.file_size))
+
+                  off, walked, bad = 32, 0, None
+                  while walked < ncmds:
+                      if off + 8 > len(d):
+                          bad = "command %d starts past the %d bytes we read" % (walked, len(d))
+                          break
+                      cmd, cs = struct.unpack_from("<II", d, off)
+                      if cs == 0:
+                          bad = ("command %d at %#x has cmdsize 0 (zero padding) - "
+                                 "ncmds claims %d" % (walked, off, ncmds))
+                          break
+                      if cs < 8 or off + cs > 32 + szcmds:
+                          bad = ("command %d at %#x type=%#x cmdsize=%#x overflows the "
+                                 "declared area (ends %#x)" % (walked, off, cmd, cs, 32 + szcmds))
+                          break
+                      if cmd == LC_CODE_SIGNATURE:
+                          dataoff, datasize = struct.unpack_from("<II", d, off + 8)
+                          if dataoff + datasize > info.file_size:
+                              print("::error::%s: %s LC_CODE_SIGNATURE ends at %d, past EOF %d"
+                                    % (path, name, dataoff + datasize, info.file_size))
+                              rc = 1
+                      off += cs
+                      walked += 1
+
+                  if bad:
+                      print("::error::%s: %s malformed load commands: %s" % (path, name, bad))
+                      rc = 1
+                  elif walked != ncmds:
+                      print("::error::%s: %s walked %d commands but ncmds=%d"
+                            % (path, name, walked, ncmds))
+                      rc = 1
+                  else:
+                      print("   %d/%d commands parse cleanly" % (walked, ncmds))
+              return rc
+
+
+          if __name__ == "__main__":
+              sys.exit(max(main(p) for p in sys.argv[1:]))
+          PYEOF
+          python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$RUNNER_TEMP/tools/check_macho.py"
+          echo "MACHO_CHECK=$RUNNER_TEMP/tools/check_macho.py" >> "$GITHUB_ENV"
+
+      - name: Inject deb into IPA (cyan)
+        run: |
+          set -eo pipefail
+          mkdir -p Outputs/IPAS
+          DEB_EXTRACT="$RUNNER_TEMP/deb-extract"; mkdir -p "$DEB_EXTRACT"
+          dpkg-deb -R "$GITHUB_WORKSPACE/eevee.deb" "$DEB_EXTRACT"
+
+          DYLIB_SRC=$(find "$DEB_EXTRACT" -name 'EeveeSpotify.dylib' | head -1)
+          BUNDLE_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSpotify.bundle' | head -1)
+          FRAMEWORK_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSwiftProtobuf.framework' | head -1)
+
+          PLIST="$RUNNER_TEMP/spotify-Info.plist"
+          unzip -p "$GITHUB_WORKSPACE/spotify.ipa" 'Payload/Spotify.app/Info.plist' > "$PLIST"
+
+          SPOT_VERSION="${URL_VERSION:-}"
+          [ -n "$SPOT_VERSION" ] || SPOT_VERSION=$(plutil -extract CFBundleShortVersionString raw "$PLIST" 2>/dev/null || echo "unknown")
+          PACKED_VER=$(plutil -extract SpotifyVersionPacked raw "$PLIST" 2>/dev/null || true)
+
+          CONTROL="$DEB_EXTRACT/control"
+          [ -f "$CONTROL" ] || CONTROL="$DEB_EXTRACT/DEBIAN/control"
+          EEVEE_VERSION=$(awk '/^Version:/ {print $2; exit}' "$CONTROL")
+
+          OUT="Outputs/IPAS/${FILE_PREFIX}-${SPOT_VERSION}-ESR-${EEVEE_VERSION}.ipa"
+
+          {
+            echo "SPOTIFY_VERSION=$SPOT_VERSION"
+            echo "SPOTIFY_VERSION_PACKED=$PACKED_VER"
+            echo "TWEAK_VERSION=$EEVEE_VERSION"
+            echo "OUT_IPA=$OUT"
+          } >> "$GITHUB_ENV"
+
+          INJECT=("$DYLIB_SRC")
+          [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
+          [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
+
+          cyan -i "$GITHUB_WORKSPACE/spotify.ipa" -o "$OUT" \
+               -f "${INJECT[@]}" -c 9 -m 15.0 -du
+
+      - name: Post-process IPA
+        env:
+          JSON_PATH: ${{ secrets.PATH1 }}
+          JSON_KEY: ${{ secrets.XESR }}
+          JSON_VALUE: ${{ secrets.HELLO }}
+          HTML_PATH: ${{ secrets.PATH2 }}
+          HTML_INJECT: ${{ secrets.HTML }}
+          INJECT_TARGETS: ${{ secrets.INJECT_TARGETS }}
+          INJECT_KEY: ${{ secrets.INJECT_KEY }}
+          INJECT_VALUE: ${{ secrets.INJECT_VALUE }}
+        run: |
+          set -eo pipefail
+          cd "$(dirname "$OUT_IPA")"
+          IPA_NAME="$(basename "$OUT_IPA")"
+
+          rm -rf Payload
+          unzip -q "$IPA_NAME"
+          APP="$(find Payload -maxdepth 2 -name '*.app' -type d | head -1)"
+          [ -n "$APP" ] || { echo "::error::no .app inside $IPA_NAME"; exit 1; }
+
+          touch Payload/softgaypaws.com
+          rm -rf "$APP/com.apple.WatchPlaceholder" "$APP/Watch"
+
+          if [ -n "$JSON_PATH" ] && [ -f "$JSON_PATH" ] && [ -n "$JSON_VALUE" ]; then
+            jq --arg k "$JSON_KEY" --arg v "$JSON_VALUE" '. + {($k): $v}' "$JSON_PATH" > tmp.json
+            mv tmp.json "$JSON_PATH"
+          fi
+
+          if [ -n "$HTML_PATH" ] && [ -f "$HTML_PATH" ] && [ -n "$HTML_INJECT" ]; then
+            perl -pi -e 's|(</body>)|$ENV{HTML_INJECT}$1|i' "$HTML_PATH"
+          fi
+
+          python3 "$GITHUB_WORKSPACE/.github/scripts/inject-credit.py" --dir "$APP" || echo "::warning::credit injection could not run, continuing without it"
+
+          "$GITHUB_WORKSPACE/Tools/alt-icons.sh" "$PWD/$APP"
+
+          mkdir -p "$APP/PlugIns"
+          rm -rf "$APP/PlugIns/OpenSpotifySafariExtension.appex"
+          cp -R "$OPENSPOTIFY_APPEX" "$APP/PlugIns/OpenSpotifySafariExtension.appex"
+
+          rm -f "$IPA_NAME"
+          zip -qry "$IPA_NAME" Payload
+          rm -rf Payload
+
+      - name: Create patched duplicate & inject zxPluginsInject (cyan, not ipapatch)
+        run: |
+          set -eo pipefail
+          PATCHED_OUT="${OUT_IPA%.ipa}-patched.ipa"
+          ZX="$GITHUB_WORKSPACE/extra_dylibs/zxPluginsInject.dylib"
+          [ -f "$ZX" ] || { echo "::error::$ZX is missing"; exit 1; }
+
+          # ipapatch --dylib corrupts the load-command stream on this already-patched
+          # binary; cyan writes valid commands and is what injects EeveeSpotify above.
+          cyan -i "$OUT_IPA" -o "$PATCHED_OUT" -f "$ZX" -c 9 -du
+
+          echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
+
+      - name: Validate mach-o load commands
+        run: |
+          set -eo pipefail
+          python3 "$MACHO_CHECK" "$OUT_IPA" "$PATCHED_IPA"
+
+      - name: Record build metadata
+        run: |
+          set -eo pipefail
+          for v in FILE_PREFIX SPOTIFY_VERSION TWEAK_VERSION TIMESTAMP; do
+            [ -n "${!v}" ] || { echo "::error::$v is empty"; exit 1; }
+          done
+          {
+            echo "FILE_PREFIX=$FILE_PREFIX"
+            echo "SPOTIFY_VERSION=$SPOTIFY_VERSION"
+            echo "TWEAK_VERSION=$TWEAK_VERSION"
+            echo "TIMESTAMP=$TIMESTAMP"
+          } > Outputs/IPAS/meta.env
+
+      - name: Hand IPAs to the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios15-ipas-${{ github.run_id }}
+          path: |
+            Outputs/IPAS/*.ipa
+            Outputs/IPAS/meta.env
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: ${{ inputs.upload_local || inputs.upload_to_alt_repo || inputs.upload_to_telegram }}
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios15-ipas-${{ github.run_id }}
+          path: Outputs/IPAS
+
+      - name: Load build metadata
+        run: |
+          set -eo pipefail
+          for k in FILE_PREFIX SPOTIFY_VERSION TWEAK_VERSION TIMESTAMP; do
+            grep -q "^$k=." Outputs/IPAS/meta.env || { echo "::error::$k missing from meta.env"; exit 1; }
+          done
+          cat Outputs/IPAS/meta.env >> "$GITHUB_ENV"
+
+      - name: Build changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUSTOM_LOG: ${{ inputs.changelog_changer }}
+        run: |
+          cat << 'MARKDOWN' > changelog.txt
+          # EXPERIMENTAL iOS 15 shim build - not a normal EeveeSpotify IPA
+
+          This comes from the iOS 15 shim pipeline and is only useful on iOS 15.
+          Do not install it on a supported device; use a normal build for that.
+          ---
+          ### original changelog:
+
+          MARKDOWN
+          gh release view --repo jaydenjcpy/EeveeSpotifyReincarnated --json body -q .body >> changelog.txt || true
+
+          if [ -n "$CUSTOM_LOG" ]; then
+            printf '%s\n' "$CUSTOM_LOG" > changelog-override.txt
+          else
+            cp changelog.txt changelog-override.txt
+          fi
+
+      - uses: ./.github/actions/publish
+        with:
+          files: Outputs/IPAS/*.ipa
+          body_path: changelog-override.txt
+          alt_body_path: changelog.txt
+          tag_name: ios15-experimental-${{ env.TWEAK_VERSION }}-${{ env.TIMESTAMP }}
+          release_name: "[EXPERIMENTAL iOS 15] Spotify v${{ env.SPOTIFY_VERSION }} (Prefix ${{ env.FILE_PREFIX }}) // Tweak v${{ env.TWEAK_VERSION }} // Build Timestamp ${{ env.TIMESTAMP }}"
+          regular_ipa: Outputs/IPAS/${{ env.FILE_PREFIX }}-${{ env.SPOTIFY_VERSION }}-ESR-${{ env.TWEAK_VERSION }}.ipa
+          patched_ipa: Outputs/IPAS/${{ env.FILE_PREFIX }}-${{ env.SPOTIFY_VERSION }}-ESR-${{ env.TWEAK_VERSION }}-patched.ipa
+          caption: "[EXPERIMENTAL iOS 15] ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas"
+          append_changelog_to_caption: 'true'
+          upload_local: ${{ inputs.upload_local }}
+          upload_to_alt_repo: ${{ inputs.upload_to_alt_repo }}
+          upload_to_telegram: ${{ inputs.upload_to_telegram }}
+          github_token: ${{ github.token }}
+          alt_repo_name: ${{ secrets.ALT_REPO_NAME }}
+          alt_repo_token: ${{ secrets.ALT_REPO_TOKEN }}
+          tg_bot_token: ${{ secrets.TG_BOT_TOKEN }}
+          tg_chat_id: ${{ secrets.TG_CHAT_ID }}
+          tg_api_id: ${{ secrets.TG_API_ID }}
+          tg_api_hash: ${{ secrets.TG_API_HASH }}
