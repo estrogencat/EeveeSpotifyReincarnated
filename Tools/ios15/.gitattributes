@@ -1,0 +1,9 @@
+# the symbol database must never be line-ending converted
+ios15-symbols.txt.xz -text binary
+
+# the shim sources and scripts are LF, and the patcher is byte-exact about them
+*.sh text eol=lf
+*.py text eol=lf
+*.c  text eol=lf
+*.s  text eol=lf
+work/impl_syms.txt text eol=lf

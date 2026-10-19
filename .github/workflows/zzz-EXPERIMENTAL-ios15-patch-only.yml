@@ -1,0 +1,129 @@
+name: "[EXPERIMENTAL] iOS 15 patch only (no tweak) - DO NOT USE for normal builds"
+
+# Takes a decrypted Spotify IPA and patches it to run on iOS 15. That is ALL it does:
+# no EeveeSpotify, no zxPluginsInject, no release, no version-file commit. It exists so
+# the iOS 15 shim can be tested without building locally and installing over ssh.
+#
+# The output is NOT signed. Install it with TrollStore, which signs at install time.
+# It is only useful on iOS 15 - on a supported device, use a normal build.
+#
+# Runs on ubuntu because none of this needs Xcode: the shim is compiled by
+# `python -m ziglang cc`, and the rest is python driving lief and capstone.
+#
+# Everything lives in Tools/ios15/. See Tools/ios15/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: "URL to a DECRYPTED Spotify IPA (not from the App Store)"
+        default: ""
+        required: true
+        type: string
+      keep_build_log:
+        description: "Also upload the intermediate build files (big, for debugging)"
+        default: false
+        required: false
+        type: boolean
+
+concurrency:
+  group: ios15-patch-only
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: levibostian/action-hide-sensitive-inputs@v1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install build deps
+        run: |
+          set -eo pipefail
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet lief capstone ziglang
+          python3 -c "import lief, capstone; print('lief', lief.__version__, '| capstone', capstone.__version__)"
+          python3 -m ziglang version
+
+      - name: Download the input IPA
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+        run: |
+          set -eo pipefail
+          curl -fL --retry 3 --retry-delay 2 --retry-all-errors \
+               -o "$RUNNER_TEMP/input.ipa" "$IPA_URL"
+          got=$(file --mime-type -b "$RUNNER_TEMP/input.ipa")
+          case "$got" in
+            application/zip|application/x-ios-app) ;;
+            *) echo "::error::downloaded file is $got, not an ipa"; exit 1 ;;
+          esac
+          ls -la "$RUNNER_TEMP/input.ipa"
+
+      - name: Read the Spotify version from the IPA
+        run: |
+          set -eo pipefail
+          unzip -p "$RUNNER_TEMP/input.ipa" 'Payload/Spotify.app/Info.plist' > "$RUNNER_TEMP/Info.plist"
+          VER=$(python3 - "$RUNNER_TEMP/Info.plist" <<'PYEOF'
+          import plistlib, sys
+          d = plistlib.load(open(sys.argv[1], "rb"))
+          print(d.get("CFBundleShortVersionString", "unknown"))
+          PYEOF
+          )
+          echo "SPOTIFY_VERSION=$VER" >> "$GITHUB_ENV"
+          echo "OUT_IPA=$GITHUB_WORKSPACE/Outputs/Spotify-$VER-iOS15.ipa" >> "$GITHUB_ENV"
+          echo "input is Spotify $VER"
+
+      - name: Patch for iOS 15
+        run: |
+          set -eo pipefail
+          bash Tools/ios15/ios15-patch.sh "$RUNNER_TEMP/input.ipa" "$OUT_IPA" "$RUNNER_TEMP/ios15-build"
+
+      - name: Validate mach-o load commands
+        run: python3 Tools/ios15/check_macho.py "$OUT_IPA"
+
+      - name: Summarise
+        run: |
+          set -eo pipefail
+          {
+            echo "### iOS 15 patch"
+            echo
+            echo "- input: Spotify \`$SPOTIFY_VERSION\`"
+            echo "- output: \`$(basename "$OUT_IPA")\` ($(du -h "$OUT_IPA" | cut -f1))"
+            echo "- load commands: validated"
+            echo
+            echo "**Unsigned** - install with TrollStore, which signs on install."
+            echo "Only useful on iOS 15."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the patched IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotify-${{ env.SPOTIFY_VERSION }}-ios15
+          path: ${{ env.OUT_IPA }}
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload intermediate build files
+        if: ${{ inputs.keep_build_log }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios15-intermediates-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ios15-build/work/libshim.dylib
+            ${{ runner.temp }}/ios15-build/work/gen.s
+            ${{ runner.temp }}/ios15-build/work/shim_exports.txt
+            ${{ runner.temp }}/ios15-build/work/xj_gen.h
+            ${{ runner.temp }}/ios15-build/hardsyms.json
+            ${{ runner.temp }}/ios15-build/xj_patches.json
+          retention-days: 3
+          if-no-files-found: warn
