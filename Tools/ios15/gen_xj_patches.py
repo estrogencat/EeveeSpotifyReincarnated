@@ -117,10 +117,13 @@ for s in b.sections:
 json.dump(patches, open("xj_patches.json", "w"))
 
 os.makedirs("work", exist_ok=True)
+sh = kept_shapes.get("StateHolderInternal", {})
+nps = set(sh.values())
+assert len(nps) <= 1, nps
 with open("work/xj_gen.h", "w", newline="\n") as f:
     f.write("#define SHA_PROTO \"StateHolderInternal\"\n")
-    f.write("#define SHA_NPARAMS 1\n")
-    f.write("#define SHA_NSHAPES %d\n" % len(kept_shapes.get("StateHolderInternal", ())))
+    f.write("#define SHA_NPARAMS %d\n" % (nps.pop() if nps else 1))
+    f.write("#define SHA_NSHAPES %d\n" % len(sh))
 
 print(stats)
 for k, v in kept_shapes.items():

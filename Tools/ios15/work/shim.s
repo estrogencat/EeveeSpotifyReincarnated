@@ -166,6 +166,33 @@ _shim_call_unbridge:
   ldp x29, x30, [sp], #16
   ret
 
+.globl _shim_call_mk
+.p2align 2
+_shim_call_mk:
+  stp x29, x30, [sp, #-32]!
+  mov x29, sp
+  str x20, [sp, #16]
+  mov x9, x2
+  mov x8, x0
+  mov x20, x1
+  blr x9
+  ldr x20, [sp, #16]
+  ldp x29, x30, [sp], #32
+  ret
+
+.globl _shim_call_hcinit
+.p2align 2
+_shim_call_hcinit:
+  stp x29, x30, [sp, #-32]!
+  mov x29, sp
+  str x20, [sp, #16]
+  mov x9, x2
+  mov x20, x1
+  blr x9
+  ldr x20, [sp, #16]
+  ldp x29, x30, [sp], #32
+  ret
+
 .globl _swift_getKeyPath
 .p2align 2
 _swift_getKeyPath:
@@ -368,7 +395,7 @@ _shim_conf_contentview:
 .p2align 2
 .globl _$s7SwiftUI22UIHostingConfigurationVA2A9EmptyViewVRs_rlE7contentACyxAEGxyXE_tcfC
 _$s7SwiftUI22UIHostingConfigurationVA2A9EmptyViewVRs_rlE7contentACyxAEGxyXE_tcfC:
-  mov x3, x8
+  mov x4, x8
   b _shim_cfg_init
 
 .p2align 2

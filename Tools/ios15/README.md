@@ -30,11 +30,34 @@ supported device use a normal build.
 | `gen_bindmap.py` | `work/bindmap_Spotify.pkl`: bound address → imported symbol |
 | `hard_syms.py` | classifies every import against iOS 15 → `hardsyms.json` |
 | `build_shim.sh` | `gen_xj_patches.py`, `gen_shim.py`, `ziglang cc`, `fixplat.py`, `check_pac.py`, `dump_shim_exports.py` → `work/libshim.dylib` |
-| `patch.py` | rewrites the import table, applies the typeref patches, sets `MinimumOSVersion`, repacks |
+| `patch.py` | rewrites the import table, appends the shim load command, applies the typeref patches, sets `MinimumOSVersion`, repacks |
 | `check_macho.py` | refuses to ship a binary whose load commands dyld would reject |
 
 A good run prints `294 xj rewrites`, `0 keypath fixups`, `instruction scan clean` and
-`146/146 commands parse cleanly` for Spotify 9.1.90.
+`148/148 commands parse cleanly` for Spotify 9.1.90. Those counts are version-dependent -
+`patch.py` and `check_macho.py` print what they actually found, so compare like for like.
+Reported working on 9.1.80 and 9.1.92 as well; only 9.1.90 has been verified on the device
+by the upstream project.
+
+## How the shim gets loaded
+
+`patch.py` **appends a real `LC_LOAD_DYLIB`** for `@rpath/libshim.dylib`, bumping `ncmds`
+and `sizeofcmds` and writing the command into the zero padding between the end of the load
+commands and the first section. Spotify leaves about 131 KB there (commands end `0x3fb8`,
+first section `0x24000`) and SpotifyShared about 41 KB, so there is room to spare. The same
+path appends a command for any rebind target that has no load command of its own, currently
+`libswiftFoundation.dylib`. Appending puts the new dylib last in load order, so every
+existing library ordinal stays valid.
+
+`@rpath` resolves because both binaries carry an `@executable_path/Frameworks` `LC_RPATH`,
+and the command is a **required** load rather than a weak one, so a missing shim fails
+loudly instead of silently binding its symbols to zero.
+
+This replaced an earlier trick that **overwrote the path of an unused weak-dylib load
+command slot** (a `libswift*.dylib` nothing imported from). That worked, but it rested on
+the belief that there was no header room to append to, which measurement disproved, and it
+would have broken the day a Spotify build shipped without a spare slot. `patch.py` now
+prints `appended N hdr room left 0x...` so the headroom is visible on every run.
 
 ## The symbol database
 

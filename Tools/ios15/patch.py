@@ -28,9 +28,13 @@ def patch_macho(p,shim_slot=True):
     d=bytearray(open(p,'rb').read())
     magic,cpu,_,ft,nc,sz,fl,_r=struct.unpack_from("<8I",d,0)
     assert magic==0xfeedfacf
-    off=32;libs=[];fix=None
+    off=32;libs=[];fix=None;secoff=[]
     for i in range(nc):
         cmd,cs=struct.unpack_from("<II",d,off)
+        if cmd==0x19:
+            for s in range(struct.unpack_from("<I",d,off+64)[0]):
+                fx=struct.unpack_from("<I",d,off+72+80*s+48)[0]
+                if fx: secoff.append(fx)
         if cmd==0x32:
             plat,minos,sdk=struct.unpack_from("<3I",d,off+8)
             if plat==2 and minos>0xF0000: struct.pack_into("<I",d,off+12,0xF0000)
@@ -42,32 +46,36 @@ def patch_macho(p,shim_slot=True):
     fo,fs=fix
     v,so,imo,syo,ic,ifmt,sfmt=struct.unpack_from("<7I",d,fo)
     assert ifmt==1 and sfmt==0
-    used=[0]*(len(libs)+1)
     ent=[]
     for i in range(ic):
         w=struct.unpack_from("<I",d,fo+imo+4*i)[0]
         ordv=w&0xff;weak=(w>>8)&1;no=w>>9
         e=d.find(b"\0",fo+syo+no);name=bytes(d[fo+syo+no:e]).decode()
-        ent.append((i,ordv,weak,name));
-        if 0<ordv<=len(libs): used[ordv]+=1
+        ent.append((i,ordv,weak,name))
     absent=set()
     for idx,(off,cmd,cs,path) in enumerate(libs,1):
         if path.startswith(("/System","/usr/lib")) and path not in paths and path not in ex and path not in rex:
             absent.add(idx)
             if cmd==0xC: struct.pack_into("<I",d,off,0x80000018)
-    freeslots=[idx for idx,(off,cmd,cs,path) in enumerate(libs,1) if cmd==0x80000018 and used[idx]==0 and cs>=64 and "libswift" in path]
-    def setpath(idx,newpath):
-        off,cmd,cs,path=libs[idx-1]
-        nb=newpath.encode()+bytes(1)
-        assert 24+len(nb)<=cs
-        d[off+24:off+cs]=nb+bytes(1)*(cs-24-len(nb))
-        libs[idx-1]=(off,cmd,cs,newpath)
+    hdr=[nc,sz];limit=min(secoff)
+    def append_dylib(path):
+        nb=path.encode()+bytes(1)
+        cs=(24+len(nb)+7)&~7
+        at=32+hdr[1]
+        assert at+cs<=limit,"no header room for a load command in "+p
+        assert not any(d[at:at+cs]),"header padding is not free in "+p
+        struct.pack_into("<6I",d,at,0xC,cs,24,0,0x10000,0x10000)
+        d[at+24:at+24+len(nb)]=nb
+        hdr[0]+=1;hdr[1]+=cs
+        struct.pack_into("<II",d,16,hdr[0],hdr[1])
+        libs.append((at,0xC,cs,path))
+        return len(libs)
     slots={}
     def ordinal_for(target):
         if target in slots: return slots[target]
         for idx,(off,cmd,cs,path) in enumerate(libs,1):
             if path==target and idx not in absent: slots[target]=idx;return idx
-        idx=freeslots.pop(0);setpath(idx,target);slots[target]=idx;return idx
+        idx=append_dylib(target);slots[target]=idx;return idx
     FORCE={"_swift_getKeyPath","_swift_dynamicCast","_swift_dynamicCastClass","_swift_dynamicCastMetatype","_swift_getTypeByMangledNameInContext","_swift_getTypeByMangledNameInEnvironment","_swift_getWitnessTable","_swift_getAssociatedTypeWitness","_swift_getGenericMetadata","_swift_getAssociatedConformanceWitness","_swift_allocateGenericClassMetadata","_swift_initClassMetadata2","_swift_allocateGenericValueMetadata","_swift_updateClassMetadata2","_swift_getSingletonMetadata"}
     nweak=nshim=nre=0
     if shim_slot: SH=ordinal_for("@rpath/libshim.dylib")
@@ -100,7 +108,8 @@ def patch_macho(p,shim_slot=True):
         elif not weak:
             w|=1<<8;nweak+=1
         struct.pack_into("<I",d,fo+imo+4*i,w)
-    print(os.path.basename(p),"absent libs",len(absent),"shim",nshim,"rebound",nre,"weakened",nweak,"slots",slots)
+    print(os.path.basename(p),"absent libs",len(absent),"shim",nshim,"rebound",nre,"weakened",nweak,
+          "appended",hdr[0]-nc,"hdr room left",hex(limit-32-hdr[1]),"slots",slots)
     open(p,'wb').write(d)
 
 KPNAMEFIX=[]

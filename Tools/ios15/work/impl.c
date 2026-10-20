@@ -2319,6 +2319,94 @@ static void hostcfg_setup(void)
            (const void *)wt_slot_stub, "hostcfg-slot-cfgmod");
 }
 
+/* stage 2: host the real content.
+
+   stage 1 never called the content closure, so every cell got an empty view -
+   41 of them on one device-picker open, which is exactly what an empty device
+   list looks like. the closure is non-escaping, so it has to run inside
+   init(content:).
+
+   the configuration word stays ZERO, which is the only value stage 1 ever
+   proved safe: libswiftUIKit's existential destroy swift_releases whatever is
+   in it (see 8e cause 3, and the 2026-10-19 crash that put a cell pointer
+   there). so the cell travels from init(content:) to makeContentView through
+   g_pending instead - they run back to back in one call chain, see
+   Spotify+0x85be810. the cell holds a retained UIHostingController<Content>
+   and is never freed; one cell per cfg, capped.
+
+   every convention here was read off spotify's own call sites and SwiftUI's own
+   code, not assumed:
+     init(content:)  x0=closure fn  x1=closure ctx  x2=Content metadata
+                     x3=Content:View witness table  x8=sret
+     the closure     x8=result buffer  x20=captures (ldp x0,x1,[x20,#0x10])
+     UIHostingControllerCMa(request, Content md, Content:View wt)
+     init(rootView:) x0=&rootView (@in, consumed)  x20=class metadata
+   self arrives as a POINTER in x20 everywhere, including through the direct
+   method symbols, because spotify's callers are generic over Content and so
+   the configuration is address-only to them. */
+
+typedef struct { double w, h; } ShSize;
+typedef struct { double x, y, w, h; } ShRect;
+typedef struct { void *hc; } CfgCell;
+
+extern void free(void *);
+extern void shim_call_mk(void *out, void *ctx, void *fn) __asm__("_shim_call_mk");
+extern void *shim_call_hcinit(void *arg, const void *md, void *fn) __asm__("_shim_call_hcinit");
+
+static id msg0(id o, const char *s)
+{
+    return o ? ((id (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : 0;
+}
+
+static unsigned long msg_count(id o)
+{
+    return o ? ((unsigned long (*)(id, SEL))objc_msgSend)(o, sel_registerName("count")) : 0;
+}
+
+static id msg_at(id o, unsigned long i)
+{
+    return o ? ((id (*)(id, SEL, unsigned long))objc_msgSend)(o,
+                   sel_registerName("objectAtIndex:"), i) : 0;
+}
+
+/* the cell height comes from here when the hosted view has no intrinsic size
+   of its own. width stays unconstrained either way - the row is as wide as the
+   table gives it. */
+static ShSize scv_intrinsic(id self, SEL cmd)
+{
+    static int logged;
+    ShSize r;
+    id subs, hv;
+    r.w = -1; r.h = -1;
+    (void)cmd;
+    subs = msg0(self, "subviews");
+    if (!msg_count(subs)) return r;
+    hv = msg_at(subs, 0);
+    if (!hv) return r;
+    r = ((ShSize (*)(id, SEL))objc_msgSend)(hv, sel_registerName("intrinsicContentSize"));
+    if (r.h > 0) {
+        if (!logged) { logged = 1; shim_log("hostcfg-size", "intrinsic"); }
+        return r;
+    }
+    {
+        ShRect bb = ((ShRect (*)(id, SEL))objc_msgSend)(self, sel_registerName("bounds"));
+        ShSize fit;
+        fit.w = bb.w > 0 ? bb.w : 375;
+        fit.h = 0;
+        r = ((ShSize (*)(id, SEL, ShSize))objc_msgSend)(hv,
+                sel_registerName("sizeThatFits:"), fit);
+    }
+    if (!logged) {
+        char b[32];
+        logged = 1;
+        putnum(b, (unsigned long long)(r.h > 0 ? (uint64_t)r.h : 0));
+        shim_log("hostcfg-size fits-h", b);
+    }
+    if (r.h <= 0) { r.w = -1; r.h = -1; return r; }
+    r.w = -1;
+    return r;
+}
+
 static Class shim_view_class(void)
 {
     static Class c;
@@ -2329,44 +2417,149 @@ static Class shim_view_class(void)
         c = objc_getClass("ShimContentView");
         if (!c && sup) {
             c = objc_allocateClassPair(sup, "ShimContentView", 0);
-            if (c) objc_registerClassPair(c);
+            if (c) {
+                class_addMethod(c, sel_registerName("intrinsicContentSize"),
+                                (IMP)scv_intrinsic, "{CGSize=dd}16@0:8");
+                objc_registerClassPair(c);
+            }
         }
         shim_log("hostcfg-viewclass", c ? "ok" : "FAILED");
     }
     return c;
 }
 
-/* stage 1 stores NOTHING in a UIHostingConfiguration: the content closure is
-   non-escaping and deliberately never called, makeContentView ignores self, and
-   the configuration getter hands back an empty existential. so the value is one
-   POD word, and there is no object here for anyone to refcount.
+static unsigned g_cells;
+static void *g_pending;
 
-   three builds were spent learning that, each by modelling it as some kind of
-   object and watching a different consumer disagree about how to own it: an objc
-   NSObject died in swift's native dealloc reading destroy from metadata-0x10
-   (word 0 is a packed isa, not a metadata pointer); a swift_allocBox object died
-   in swift_unknownObjectRetain, which handed its runtime-generated metadata to
-   libobjc and got "Attempt to use unknown class". a POD word cannot be mistaken
-   for either kind, because it is not a reference at all. if stage 2 ever hosts
-   real content, the value becomes a real retained reference and obj_vwt (still
-   defined above, now unused) is the starting point - but it must then match what
-   the consumer does, which is swift-native refcounting. */
-static void *cfg_box_new(void)
+static unsigned ahex(char *b, unsigned j, uint64_t v)
 {
-    return 0;
+    int i;
+    int lead = 1;
+    for (i = 60; i >= 0; i -= 4) {
+        unsigned d = (unsigned)((v >> i) & 0xf);
+        if (lead && d == 0 && i) continue;
+        lead = 0;
+        b[j++] = (char)(d < 10 ? '0' + d : 'a' + d - 10);
+    }
+    return j;
 }
 
-void shim_cfg_init(void *fn, void *ctx, void *content_md, void **out);
-void shim_cfg_init(void *fn, void *ctx, void *content_md, void **out)
+static const void *hc_metadata(const void *content_md, const void *view_wt)
 {
-    (void)fn; (void)ctx; (void)content_md;
+    static MetaResponse (*acc)(uint64_t, const void *, const void *);
+    static int tried;
+    if (!tried) {
+        tried = 1;
+        acc = (MetaResponse (*)(uint64_t, const void *, const void *))
+                  dlsym(RTLD_DEFAULT, "$s7SwiftUI19UIHostingControllerCMa");
+        shim_log("hostcfg-hcma", acc ? "ok" : "missing");
+    }
+    if (!acc) return 0;
+    return acc(0, content_md, view_wt).metadata;
+}
+
+static void *cfg_cell_new(void *fn, void *ctx, const void *content_md, const void *view_wt)
+{
+    static void *initfn;
+    static int tried;
+    const VWT *vwt;
+    const void *hcmd;
+    CfgCell *cell;
+    void *buf, *hc;
+    uint64_t sz;
+
+    if (!tried) {
+        tried = 1;
+        initfn = dlsym(RTLD_DEFAULT,
+                       "$s7SwiftUI19UIHostingControllerC8rootViewACyxGx_tcfC");
+        shim_log("hostcfg-hcinit", initfn ? "ok" : "missing");
+    }
+    if (!fn || !content_md || !initfn) return 0;
+    if (g_cells >= 8192) {
+        shim_log("hostcfg-init", "cellcap");
+        return 0;
+    }
+    vwt = *(const VWT *const *)((const char *)content_md - 8);
+    if (!vwt) return 0;
+    sz = vwt->size;
+    if (sz > 8192) {
+        shim_log("hostcfg-init", "content-too-big");
+        return 0;
+    }
+    hcmd = hc_metadata(content_md, view_wt);
+    if (!hcmd) return 0;
+    buf = malloc(sz < 8 ? 8 : (unsigned long)sz);
+    if (!buf) return 0;
+    shim_call_mk(buf, ctx, fn);
+    hc = shim_call_hcinit(buf, hcmd, initfn);
+    free(buf);
+    if (!hc) {
+        shim_log("hostcfg-init", "hc-null");
+        return 0;
+    }
+    cell = (CfgCell *)malloc(sizeof *cell);
+    if (!cell) return 0;
+    cell->hc = hc;
+    g_cells++;
+    if (g_cells < 4) {
+        char b[64];
+        unsigned j = 0;
+        j = acat(b, j, "cell=");
+        j = ahex(b, j, (uint64_t)(uintptr_t)cell);
+        j = acat(b, j, " hc=");
+        j = ahex(b, j, (uint64_t)(uintptr_t)hc);
+        b[j] = 0;
+        shim_log("hostcfg-cell", b);
+    }
+    return cell;
+}
+
+static void cfg_attach(id container, id hv)
+{
+    static const char *const ax[4] = {
+        "leadingAnchor", "trailingAnchor", "topAnchor", "bottomAnchor"
+    };
+    unsigned i;
+    if (!container || !hv) return;
+    ((void (*)(id, SEL, bool))objc_msgSend)(hv,
+        sel_registerName("setTranslatesAutoresizingMaskIntoConstraints:"), 0);
+    ((void (*)(id, SEL, id))objc_msgSend)(container,
+        sel_registerName("addSubview:"), hv);
+    ((void (*)(id, SEL, id))objc_msgSend)(hv,
+        sel_registerName("setBackgroundColor:"),
+        msg0((id)objc_getClass("UIColor"), "clearColor"));
+    for (i = 0; i < 4; i++) {
+        id a = msg0(hv, ax[i]);
+        id b = msg0(container, ax[i]);
+        id c;
+        if (!a || !b) continue;
+        c = ((id (*)(id, SEL, id))objc_msgSend)(a,
+                sel_registerName("constraintEqualToAnchor:"), b);
+        if (!c) continue;
+        /* the bottom pin yields rather than fighting a height the table has
+           already decided */
+        if (i == 3)
+            ((void (*)(id, SEL, float))objc_msgSend)(c,
+                sel_registerName("setPriority:"), 999.0f);
+        ((void (*)(id, SEL, bool))objc_msgSend)(c, sel_registerName("setActive:"), 1);
+    }
+}
+
+void shim_cfg_init(void *fn, void *ctx, const void *content_md, const void *view_wt,
+                   void **out);
+void shim_cfg_init(void *fn, void *ctx, const void *content_md, const void *view_wt,
+                   void **out)
+{
+    void *cell;
     hostcfg_setup();
     if (!out || ((uintptr_t)out & 7)) {
         shim_log("hostcfg-init", "bad-sret");
         return;
     }
-    *out = cfg_box_new();
-    shim_log("hostcfg-init", "pod");
+    cell = cfg_cell_new(fn, ctx, content_md, view_wt);
+    g_pending = cell;
+    *out = 0;
+    shim_log("hostcfg-init", cell ? "hosted" : "empty");
 }
 
 void shim_cfg_copyself(void **out, void **self);
@@ -2386,18 +2579,22 @@ ClassExist shim_cfg_makeview_c(void *self);
 ClassExist shim_cfg_makeview_c(void *self)
 {
     ClassExist r;
+    CfgCell *cell;
     Class c;
     id v = 0;
-    (void)self;
     hostcfg_setup();
+    cell = (CfgCell *)g_pending;
+    g_pending = 0;
+    (void)self;
     c = shim_view_class();
     if (c) {
-        v = ((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("alloc"));
-        if (v) v = ((id (*)(id, SEL))objc_msgSend)(v, sel_registerName("init"));
+        v = msg0((id)c, "alloc");
+        v = msg0(v, "init");
     }
+    if (v && cell) cfg_attach(v, msg0((id)cell->hc, "view"));
     r.obj = (void *)v;
     r.wt = (const void *)shim_wt_view;
-    shim_log("hostcfg-makeview", v ? "view" : "FAILED");
+    shim_log("hostcfg-makeview", v ? (cell ? "hosted" : "empty") : "FAILED");
     return r;
 }
 
