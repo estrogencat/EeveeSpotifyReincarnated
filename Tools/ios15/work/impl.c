@@ -2430,6 +2430,10 @@ static Class shim_view_class(void)
 
 static unsigned g_cells;
 static void *g_pending;
+/* uikit reads the content view's configuration back and calls makeContentView
+   on what it gets. the word is 0, so that copy carries no cell - g_last is the
+   row's own cell, kept so the second makeview hosts instead of blanking. */
+static void *g_last;
 
 static unsigned ahex(char *b, unsigned j, uint64_t v)
 {
@@ -2520,7 +2524,13 @@ static void cfg_attach(id container, id hv)
         "leadingAnchor", "trailingAnchor", "topAnchor", "bottomAnchor"
     };
     unsigned i;
+    id sup;
     if (!container || !hv) return;
+    /* the same hosted view is attached twice per row (see g_last). moving it
+       drops the old container's constraints with it. */
+    sup = msg0(hv, "superview");
+    if (sup == container) return;
+    if (sup) msg0(hv, "removeFromSuperview");
     ((void (*)(id, SEL, bool))objc_msgSend)(hv,
         sel_registerName("setTranslatesAutoresizingMaskIntoConstraints:"), 0);
     ((void (*)(id, SEL, id))objc_msgSend)(container,
@@ -2558,6 +2568,7 @@ void shim_cfg_init(void *fn, void *ctx, const void *content_md, const void *view
     }
     cell = cfg_cell_new(fn, ctx, content_md, view_wt);
     g_pending = cell;
+    if (cell) g_last = cell;
     *out = 0;
     shim_log("hostcfg-init", cell ? "hosted" : "empty");
 }
@@ -2581,10 +2592,13 @@ ClassExist shim_cfg_makeview_c(void *self)
     ClassExist r;
     CfgCell *cell;
     Class c;
+    int reused;
     id v = 0;
     hostcfg_setup();
     cell = (CfgCell *)g_pending;
     g_pending = 0;
+    reused = !cell && g_last;
+    if (reused) cell = (CfgCell *)g_last;
     (void)self;
     c = shim_view_class();
     if (c) {
@@ -2594,7 +2608,8 @@ ClassExist shim_cfg_makeview_c(void *self)
     if (v && cell) cfg_attach(v, msg0((id)cell->hc, "view"));
     r.obj = (void *)v;
     r.wt = (const void *)shim_wt_view;
-    shim_log("hostcfg-makeview", v ? (cell ? "hosted" : "empty") : "FAILED");
+    shim_log("hostcfg-makeview",
+             v ? (cell ? (reused ? "reused" : "hosted") : "empty") : "FAILED");
     return r;
 }
 
@@ -2614,7 +2629,17 @@ void shim_view_cfg_get(void *out, id self)
 void shim_view_cfg_set(const void *in, id self);
 void shim_view_cfg_set(const void *in, id self)
 {
-    (void)in; (void)self;
+    CfgCell *cell = (CfgCell *)g_pending;
+    (void)in;
+    /* a reused cell used to keep the first row's content. only a cell from an
+       init that has not been consumed yet is safe here - taking g_last would
+       steal a live row's hosted view. */
+    if (cell && self) {
+        g_pending = 0;
+        cfg_attach(self, msg0((id)cell->hc, "view"));
+        shim_log("hostcfg-view-set", "rehost");
+        return;
+    }
     shim_log("hostcfg-view-set", "ignored");
 }
 
