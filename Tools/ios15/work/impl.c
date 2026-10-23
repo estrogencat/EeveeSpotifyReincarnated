@@ -1929,16 +1929,187 @@ void shim_regex_dynmember(void *out)
 
 extern id objc_retain(id);
 
+/* ios 16's Detent.custom(identifier:resolver:). returning largeDetent here
+   ignored the resolver, so every custom-height sheet became full height - that
+   was the dj prompt laying out behind the song name.
+
+   ios 15 has the machinery privately: _detentWithIdentifier:resolutionContextBlock:
+   takes double (^)(UIView *container, id<_UISheetPresentationControllerDetentResolutionContext>).
+   what it does NOT have is maximumDetentValue - that selector is absent from
+   the whole 15.7.7 cache - and spotify's resolvers call it (Spotify+0x4986118
+   does msgSend(ctx, maximumDetentValue) then fmul), so the resolver is handed a
+   shim context that answers it from the container view's own height.
+
+   the resolver's convention, read off two of the 13 call sites: x0 = context,
+   x20 = closure context, Optional<CGFloat> comes back as payload bits in x0
+   and the tag in w1. Spotify+0x84edd9c returns 138.0 tag 0, Spotify+0x5f77e8c
+   returns 0.0 tag 0. every failure path below falls back to largeDetent, so a
+   wrong guess here is never worse than what this did before. */
+
+typedef struct { double x, y, w, h; } DRect;
+
+typedef struct { unsigned long reserved, size; } ShimBlockDesc;
+
+typedef struct {
+    void *isa;
+    int flags;
+    int reserved;
+    void *invoke;
+    ShimBlockDesc *descriptor;
+    void *fn;
+    void *cctx;
+} ShimBlock;
+
+static ShimBlockDesc shim_blk_desc = { 0, sizeof(ShimBlock) };
+
+extern void *swift_retain(void *);
+
+extern uint32_t shim_call_resolver(id ctxobj, void *fn, void *cctx, uint64_t *bits)
+    __asm__("_shim_call_resolver");
+
+/* ios 16's ResolutionContext has containerTraitCollection and
+   maximumDetentValue. the object the internal block receives is a
+   _UISheetLayoutInfo, which already answers the first one and has
+   containerBounds, so only the second has to be added - the object itself is
+   then good enough to hand straight to spotify's resolver. */
+/* every member of _UISheetLayoutInfo is underscore-prefixed: the attribute
+   string is S_setContainerBounds:,V__containerBounds, so the getter is
+   _containerBounds and the ivar is __containerBounds. reading the ivar is the
+   fallback because it cannot be a wrong selector guess. */
+static double sli_maxdetent(id self, SEL cmd)
+{
+    static Ivar iv;
+    static int tried;
+    SEL g = sel_registerName("_containerBounds");
+    Class c;
+    (void)cmd;
+    if (!self) return 0;
+    c = object_getClass(self);
+    if (c && class_respondsToSelector(c, g)) {
+        DRect r = ((DRect (*)(id, SEL))objc_msgSend)(self, g);
+        if (r.h > 0) return r.h;
+    }
+    if (!tried) {
+        tried = 1;
+        iv = c ? class_getInstanceVariable(c, "__containerBounds") : 0;
+        shim_log("detent-bounds", iv ? "ivar" : "none");
+    }
+    if (iv) {
+        const double *r = (const double *)((const char *)self + ivar_getOffset(iv));
+        return r[3] > 0 ? r[3] : 0;
+    }
+    return 0;
+}
+
+static void arm_sheet_ctx(id info)
+{
+    static int done;
+    SEL s = sel_registerName("maximumDetentValue");
+    Class c;
+    if (done || !info) return;
+    done = 1;
+    c = object_getClass(info);
+    if (c && !class_respondsToSelector(c, s))
+        class_addMethod(c, s, (IMP)sli_maxdetent, "d@:");
+    shim_log("detent-ctx", c ? class_getName(c) : "no-class");
+}
+
+static double detent_blk_invoke(void *blk, id info, id unused)
+{
+    static int logged;
+    union { uint64_t u; double d; } v;
+    ShimBlock *b = (ShimBlock *)blk;
+    uint32_t tag;
+    (void)unused;
+    v.u = 0;
+    if (!b || !b->fn) return 0;
+    arm_sheet_ctx(info);
+    tag = shim_call_resolver(info, b->fn, b->cctx, &v.u);
+    /* first few only: the resolver runs on every layout pass, and an early
+       call can legitimately see a container with no bounds yet. */
+    if (logged < 3) {
+        char s[80], num[24];
+        unsigned j = 0;
+        logged++;
+        j = acat(s, j, tag ? "nil" : "hexh=");
+        if (!tag) {
+            putnum(num, (unsigned long long)v.d);
+            j = acat(s, j, num);
+        }
+        j = acat(s, j, " hexmax=");
+        putnum(num, (unsigned long long)sli_maxdetent(info, 0));
+        j = acat(s, j, num);
+        s[j] = 0;
+        shim_log("detent-resolve", s);
+    }
+    return tag ? 0 : v.d;
+}
+
 id uikit_detent_custom(void *ident, void *fn, void *ctx)
     __asm__("_$sSo35UISheetPresentationControllerDetentC5UIKitE6custom10identifier8resolverABSo0abcD10IdentifieraSg_12CoreGraphics7CGFloatVSgSo0abcD17ResolutionContext_pctFZ");
 id uikit_detent_custom(void *ident, void *fn, void *ctx)
 {
     static int once;
+    static unsigned n;
+    static void *globalblk;
+    static int blktried;
     Class c = (Class)objc_getClass("UISheetPresentationControllerDetent");
-    id d = c ? ((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("largeDetent")) : 0;
+    SEL mk = sel_registerName("_detentWithIdentifier:resolutionContextBlock:");
+    const char *how = "fallback-large";
+    id d = 0;
+    (void)ident;
+
+    if (!blktried) {
+        blktried = 1;
+        globalblk = dlsym(RTLD_DEFAULT, "_NSConcreteGlobalBlock");
+        shim_log("detent-blkisa", globalblk ? "ok" : "missing");
+    }
+
+    if (c && fn && globalblk &&
+        class_respondsToSelector(object_getClass((id)c), mk)) {
+        /* BLOCK_IS_GLOBAL (1<<28): Block_copy returns it unchanged and
+           Block_release is a no-op, so there is no refcount to model. it is
+           never freed - bounded by how often a sheet is configured. */
+        ShimBlock *b = (ShimBlock *)malloc(sizeof *b);
+        if (b) {
+            char nm[32], num[24];
+            unsigned j = 0;
+            id s;
+            b->isa = globalblk;
+            b->flags = 1 << 28;
+            b->reserved = 0;
+            b->invoke = (void *)detent_blk_invoke;
+            b->descriptor = &shim_blk_desc;
+            b->fn = fn;
+            /* the resolver is @escaping and arrives guaranteed, so the block
+               has to own its context or the second sheet resolves a freed
+               closure - that was the SIGSEGV inside detent_blk_invoke. never
+               released, same bounded leak as the block itself. */
+            b->cctx = ctx ? swift_retain(ctx) : 0;
+            /* spotify's identifier arrives as one word we cannot safely read
+               as an NSString, and it was getting nil before, so mint a stable
+               one instead. */
+            putnum(num, n++);
+            j = acat(nm, j, "shim.detent.");
+            j = acat(nm, j, num);
+            nm[j] = 0;
+            s = ((id (*)(id, SEL, const char *))objc_msgSend)(
+                    (id)objc_getClass("NSString"),
+                    sel_registerName("stringWithUTF8String:"), nm);
+            if (s) s = objc_retain(s);
+            if (s) {
+                d = ((id (*)(id, SEL, id, void *))objc_msgSend)((id)c, mk, s, b);
+                how = d ? "resolved" : "mk-null";
+            }
+            if (!d) free(b);
+        }
+    }
+
+    if (!d) d = c ? ((id (*)(id, SEL))objc_msgSend)((id)c,
+                        sel_registerName("largeDetent")) : 0;
     if (!once) {
         once = 1;
-        shim_log("detent-custom", d ? "large" : "<none>");
+        shim_log("detent-custom", d ? how : "<none>");
     }
     return d ? objc_retain(d) : 0;
 }
@@ -2796,19 +2967,65 @@ static void *g_arrbr;
 static void *g_qimeta;
 static int g_qi_init;
 
+static void url_bridge_init(void)
+{
+    if (g_qi_init) return;
+    g_qi_init = 1;
+    g_urlbr = dlsym(RTLD_DEFAULT, "$s10Foundation3URLV19_bridgeToObjectiveCSo5NSURLCyF");
+    g_urlunbr = dlsym(RTLD_DEFAULT,
+        "$s10Foundation3URLV36_unconditionallyBridgeFromObjectiveCyACSo5NSURLCSgFZ");
+    g_arrbr = dlsym(RTLD_DEFAULT, "$sSa10FoundationE19_bridgeToObjectiveCSo7NSArrayCyF");
+    g_qimeta = dlsym(RTLD_DEFAULT, "$s10Foundation12URLQueryItemVN");
+    shim_log("url-queryitems",
+        (g_urlbr && g_urlunbr && g_arrbr && g_qimeta) ? "ready" : "incomplete");
+}
+
+/* ios 16's URL directory properties. URL is resilient, so these return
+   indirectly through x8 - see the thunks in shim.s. the generated stubs
+   returned 0, which hands the caller a URL with a nil NSURL inside;
+   appendingPathComponent then messages a null class and aborts. that was dj x:
+   applicationSupportDirectory, then appendingPathComponent("djearcons"), at
+   Spotify+0x585db68. the README's "a wrong answer is worse than no answer"
+   in its most literal form. */
+static void url_dir_ret(void *res, id nsurl, const char *tag)
+{
+    url_bridge_init();
+    if (!res || ((uintptr_t)res & 7)) return;
+    if (!nsurl || !g_urlunbr) {
+        shim_unimpl(tag);
+        return;
+    }
+    shim_call_unbridge(res, nsurl, g_urlunbr);
+    shim_log(tag, "ok");
+}
+
+static id file_manager(void)
+{
+    return msg0((id)objc_getClass("NSFileManager"), "defaultManager");
+}
+
+void shim_url_appsupportdir(void *res);
+void shim_url_appsupportdir(void *res)
+{
+    /* NSApplicationSupportDirectory=14 NSUserDomainMask=1; this is the
+       container's Library/Application Support, which is what ios 16 returns.
+       like ios 16, it is not created here. */
+    id fm = file_manager();
+    id urls = fm ? ((id (*)(id, SEL, unsigned long, unsigned long))objc_msgSend)(fm,
+                       sel_registerName("URLsForDirectory:inDomains:"), 14, 1) : 0;
+    url_dir_ret(res, msg_count(urls) ? msg_at(urls, 0) : 0, "url-appsupport");
+}
+
+void shim_url_tmpdir(void *res);
+void shim_url_tmpdir(void *res)
+{
+    url_dir_ret(res, msg0(file_manager(), "temporaryDirectory"), "url-tmpdir");
+}
+
 void shim_url_queryitems(void *res, void *arr, void *selfurl);
 void shim_url_queryitems(void *res, void *arr, void *selfurl)
 {
-    if (!g_qi_init) {
-        g_qi_init = 1;
-        g_urlbr = dlsym(RTLD_DEFAULT, "$s10Foundation3URLV19_bridgeToObjectiveCSo5NSURLCyF");
-        g_urlunbr = dlsym(RTLD_DEFAULT,
-            "$s10Foundation3URLV36_unconditionallyBridgeFromObjectiveCyACSo5NSURLCSgFZ");
-        g_arrbr = dlsym(RTLD_DEFAULT, "$sSa10FoundationE19_bridgeToObjectiveCSo7NSArrayCyF");
-        g_qimeta = dlsym(RTLD_DEFAULT, "$s10Foundation12URLQueryItemVN");
-        shim_log("url-queryitems",
-            (g_urlbr && g_urlunbr && g_arrbr && g_qimeta) ? "ready" : "incomplete");
-    }
+    url_bridge_init();
     if (!res || !selfurl || !g_urlbr || !g_urlunbr) {
         shim_unimpl("shim_url_queryitems-unhandled");
         return;

@@ -141,6 +141,34 @@ _$s10Foundation6LocaleV6regionAC6RegionVSgvg:
   mov x0, x8
   b _shim_locale_region
 
+.globl _$s10Foundation3URLV27applicationSupportDirectoryACvgZ
+.p2align 2
+_$s10Foundation3URLV27applicationSupportDirectoryACvgZ:
+  mov x0, x8
+  b _shim_url_appsupportdir
+
+.globl _$s10Foundation3URLV18temporaryDirectoryACvgZ
+.p2align 2
+_$s10Foundation3URLV18temporaryDirectoryACvgZ:
+  mov x0, x8
+  b _shim_url_tmpdir
+
+.globl _shim_call_resolver
+.p2align 2
+_shim_call_resolver:
+  stp x29, x30, [sp, #-32]!
+  mov x29, sp
+  stp x19, x20, [sp, #16]
+  mov x19, x3
+  mov x9, x1
+  mov x20, x2
+  blr x9
+  str x0, [x19]
+  mov w0, w1
+  ldp x19, x20, [sp, #16]
+  ldp x29, x30, [sp], #32
+  ret
+
 .globl _shim_call_self0
 .p2align 2
 _shim_call_self0:

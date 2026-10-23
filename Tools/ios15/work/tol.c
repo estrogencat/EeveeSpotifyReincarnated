@@ -520,6 +520,35 @@ static id compat_nil(id self, SEL _cmd)
     return 0;
 }
 
+/* ios 16 exposed Detent.identifier. ios 15's UIKitCore already holds the value
+   in an _identifier ivar and carries all three identifier strings
+   (com.apple.UIKit.medium / .large / .unspecified) in its __cstring, so this
+   returns the real one rather than the nil the forwarder was handing back. */
+static id detent_identifier(id self, SEL _cmd)
+{
+    static int logged;
+    SEL under = sel_registerName("_identifier");
+    Class c = object_getClass(self);
+    Ivar iv;
+    id r = 0;
+    const char *how = "none";
+    if (c && class_respondsToSelector(c, under)) {
+        r = ((id (*)(id, SEL))objc_msgSend)(self, under);
+        how = "sel";
+    } else if (c && (iv = class_getInstanceVariable(c, "_identifier")) != 0) {
+        r = object_getIvar(self, iv);
+        how = "ivar";
+    }
+    /* nil here is the same silent wrong answer the forwarder gave, so say
+       which branch won and what came back. */
+    if (!logged) {
+        logged = 1;
+        logmsg("detent-id", how, r ? ((const char *(*)(id, SEL))objc_msgSend)(
+                   r, sel_registerName("UTF8String")) : "nil");
+    }
+    return r;
+}
+
 static void un_set_badge(id self, SEL _cmd, long count, id completion)
 {
     Class ua = objc_getClass("UIApplication");
@@ -561,6 +590,15 @@ static void add_compat_methods(void)
                             (IMP)compat_nop_i, "v@:q");
     Class sp = objc_getClass("UISheetPresentationController");
     if (sp) class_addMethod(sp, sel_registerName("invalidateDetents"), (IMP)compat_nop_v, "v@:");
+    Class dt = objc_getClass("UISheetPresentationControllerDetent");
+    if (dt) class_addMethod(dt, sel_registerName("identifier"), (IMP)detent_identifier, "@@:");
+    /* ios 15 behaves as .disabled, which is the old invalidation behaviour.
+       already done for UICollectionView above. */
+    Class tv = objc_getClass("UITableView");
+    if (tv) {
+        class_addMethod(tv, sel_registerName("setSelfSizingInvalidation:"), (IMP)compat_nop_i, "v@:q");
+        class_addMethod(tv, sel_registerName("selfSizingInvalidation"), (IMP)compat_zero_q, "q@:");
+    }
     Class un = objc_getClass("UNUserNotificationCenter");
     if (un) class_addMethod(un, sel_registerName("setBadgeCount:withCompletionHandler:"),
                             (IMP)un_set_badge, "v@:q@?");
