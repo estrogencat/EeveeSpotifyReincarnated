@@ -25,6 +25,9 @@ inputs:
   append_changelog_to_caption:
     description: Append body_path contents to the Telegram caption
     default: 'true'
+  prerelease:
+    description: Mark the GitHub releases as a pre-release
+    default: 'false'
   upload_local:
     default: 'false'
   upload_to_alt_repo:
@@ -59,6 +62,7 @@ runs:
         tag_name: ${{ inputs.tag_name }}
         name: ${{ inputs.release_name }}
         files: ${{ inputs.files }}
+        prerelease: ${{ inputs.prerelease }}
 
     - name: Upload to Telegram
       if: inputs.upload_to_telegram == 'true'
@@ -121,3 +125,4 @@ runs:
         tag_name: ${{ inputs.tag_name }}
         name: ${{ inputs.release_name }}
         files: ${{ inputs.files }}
+        prerelease: ${{ inputs.prerelease }}

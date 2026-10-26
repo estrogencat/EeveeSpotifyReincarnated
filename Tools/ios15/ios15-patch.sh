@@ -27,12 +27,22 @@ WORK="${3:-${RUNNER_TEMP:-/tmp}/ios15-build}"
 
 [ -f "$IN_IPA" ] || { echo "::error::input ipa not found: $IN_IPA" >&2; exit 1; }
 
+# macos has shasum, not sha256sum - the combined workflow runs this on a mac runner
+# because the eevee half needs PlistBuddy and sips
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1"
+  else
+    shasum -a 256 "$1"
+  fi
+}
+
 echo "=== toolchain fingerprint (so a build log identifies what produced the ipa)"
 ( cd "$here" && for f in patch.py hard_syms.py gen_shim.py gen_xj_patches.py \
     scan_xj.py shape_proto.py fixplat.py check_pac.py dump_shim_exports.py \
     gen_bindmap.py unpack_ios15db.py build_shim.sh ios15-symbols.txt.xz \
     work/impl.c work/tol.c work/shim.s work/impl_syms.txt; do
-    printf '%s  %s\n' "$(sha256sum "$f" | cut -c1-16)" "$f"
+    printf '%s  %s\n' "$(sha256 "$f" | cut -c1-16)" "$f"
   done )
 
 echo "=== staging $WORK"
