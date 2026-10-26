@@ -1,0 +1,81 @@
+name: Prepare a linux runner
+description: >
+  A writable bin dir on PATH, a python venv when the runner is not GitHub's, and an
+  early check for the tools the build shells out to. Call it unguarded; it works out
+  for itself what the runner already has.
+
+runs:
+  using: composite
+  steps:
+    - name: A writable bin dir, so no step needs sudo
+      shell: bash
+      run: |
+        set -eo pipefail
+        mkdir -p "$RUNNER_TEMP/bin"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    # on GitHub's runners setup-python has already provided a clean interpreter.
+    # elsewhere the distro python is PEP 668 "externally managed", so a bare pip
+    # install is refused outright - and a venv keeps every package off the host.
+    - name: Use the host's own python in a venv
+      if: runner.environment == 'self-hosted'
+      shell: bash
+      run: |
+        set -eo pipefail
+        rm -rf "$RUNNER_TEMP/venv"
+        python3 -m venv "$RUNNER_TEMP/venv" || {
+          echo "::error::python3 -m venv failed - install python3-venv"
+          exit 1
+        }
+        echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/venv/bin/python3" -V
+        "$RUNNER_TEMP/venv/bin/python3" -m pip --version
+
+    - name: Tools the build shells out to
+      shell: bash
+      run: |
+        set -eo pipefail
+        # jq is what minimal debian images lack; dpkg-deb is native here, unlike on
+        # macOS where it has to come from brew or macports
+        want=""
+        command -v jq >/dev/null 2>&1 || want="$want jq"
+        if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
+          want="$want imagemagick"
+        fi
+
+        if [ -n "$want" ]; then
+          echo "installing:$want"
+          if [ "$(id -u)" = "0" ]; then
+            apt-get update -qq && apt-get install -y -qq $want
+          elif sudo -n true 2>/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq $want
+          else
+            # a runner account should not have sudo, so installing is not ours to
+            # do - name the command instead of dying on a password prompt
+            {
+              echo "### Setup needed on this runner"
+              echo
+              echo "Missing:$want, and this account cannot install packages."
+              echo "Run this on the host as root:"
+              echo
+              echo '```bash'
+              echo "apt-get install -y$want"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::missing$want and no way to install it - see the job summary"
+            exit 1
+          fi
+        fi
+
+        missing=""
+        for t in dpkg-deb jq perl zip unzip git curl python3; do
+          command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+        done
+        if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
+          missing="$missing imagemagick"
+        fi
+        if [ -n "$missing" ]; then
+          echo "::error::missing on this runner:$missing"
+          exit 1
+        fi
+        echo "all required tools present"

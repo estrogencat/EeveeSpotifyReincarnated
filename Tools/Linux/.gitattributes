@@ -1,0 +1,3 @@
+# linux scripts must stay LF - they are run by bash on the runner
+*.sh text eol=lf
+*.py text eol=lf
