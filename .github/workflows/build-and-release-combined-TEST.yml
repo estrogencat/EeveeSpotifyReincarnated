@@ -19,6 +19,10 @@ name: Create IPA Packages (Optimised + iOS 15) [TEST]
 #   4. No Liquid Glass variant; an iOS 26 build is meaningless for iOS 15.
 #   5. Multi Upload is not offered. Only this repo's releases and/or Telegram, so an
 #      experimental IPA cannot reach the alt repo.
+#   6. Its runner is selectable. The shim is cross-compiled by zig, so this job needs
+#      no Xcode and runs fine on an x86_64 mac - verified end to end. A self-hosted
+#      runner must already have dpkg and a python3.12; it gets a venv instead of
+#      setup-python, which needs passwordless sudo on macOS.
 #
 # Everything the iOS 15 half needs lives in Tools/ios15/. See Tools/ios15/README.md.
 
@@ -35,31 +39,31 @@ on:
         default: ""
         required: false
         type: string
-      use_alt_name:
-        description: "Append TestFlight prefix?"
-        default: false
-        required: true
-        type: boolean
-      build_liquid_glass:
-        description: "Also build a Liquid Glass variant (iOS 26)"
-        default: false
-        required: false
-        type: boolean
       upload_local:
         description: "Upload to this channel"
         default: true
         required: true
         type: boolean
-      upload_to_alt_repo:
-        description: "Multi Upload"
-        default: false
-        required: true
-        type: boolean
-      upload_to_telegram:
-        description: "Upload to Telegram channel"
-        default: false
-        required: true
-        type: boolean
+      variants:
+        description: "Build variants"
+        default: "none"
+        required: false
+        type: choice
+        options:
+          - none
+          - testflight
+          - liquid-glass
+          - testflight+liquid-glass
+      extra_upload:
+        description: "Extra upload targets"
+        default: "none"
+        required: false
+        type: choice
+        options:
+          - none
+          - multi-upload
+          - telegram
+          - multi-upload+telegram
       changelog_changer:
         description: "Put the changelog here, this only edits the telegram changelog"
         default: ""
@@ -80,6 +84,14 @@ on:
           - release
           - telegram
           - release+telegram
+      ios15_runner:
+        description: "iOS 15 job runner (self-hosted needs dpkg and a python3.12)"
+        default: "macos-latest"
+        required: false
+        type: choice
+        options:
+          - macos-latest
+          - self-hosted
 
 concurrency:
   group: build-version-file
@@ -103,7 +115,7 @@ jobs:
       - name: Resolve prefix & timestamp
         env:
           IPA_URL: ${{ inputs.ipa_url }}
-          USE_ALT_NAME: ${{ inputs.use_alt_name }}
+          USE_ALT_NAME: ${{ contains(inputs.variants, 'testflight') }}
         run: |
           echo "TIMESTAMP=$(date +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_ENV"
 
@@ -374,7 +386,7 @@ jobs:
 
   publish:
     needs: build
-    if: ${{ !inputs.build_liquid_glass }}
+    if: ${{ !contains(inputs.variants, 'liquid-glass') }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -430,8 +442,8 @@ jobs:
           caption: ${{ env.FILE_PREFIX }} // Spotify v${{ env.SPOTIFY_VERSION }} // ESR v${{ env.TWEAK_VERSION }}, tweak by @compiledipas
           append_changelog_to_caption: 'true'
           upload_local: ${{ inputs.upload_local }}
-          upload_to_alt_repo: ${{ inputs.upload_to_alt_repo }}
-          upload_to_telegram: ${{ inputs.upload_to_telegram }}
+          upload_to_alt_repo: ${{ contains(inputs.extra_upload, 'multi-upload') }}
+          upload_to_telegram: ${{ contains(inputs.extra_upload, 'telegram') }}
           github_token: ${{ github.token }}
           alt_repo_name: ${{ secrets.ALT_REPO_NAME }}
           alt_repo_token: ${{ secrets.ALT_REPO_TOKEN }}
@@ -442,7 +454,7 @@ jobs:
 
   liquid_glass:
     needs: build
-    if: ${{ inputs.build_liquid_glass }}
+    if: ${{ contains(inputs.variants, 'liquid-glass') }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -499,8 +511,8 @@ jobs:
           caption: liquid glass version
           append_changelog_to_caption: 'false'
           upload_local: ${{ inputs.upload_local }}
-          upload_to_alt_repo: ${{ inputs.upload_to_alt_repo }}
-          upload_to_telegram: ${{ inputs.upload_to_telegram }}
+          upload_to_alt_repo: ${{ contains(inputs.extra_upload, 'multi-upload') }}
+          upload_to_telegram: ${{ contains(inputs.extra_upload, 'telegram') }}
           github_token: ${{ github.token }}
           alt_repo_name: ${{ secrets.ALT_REPO_NAME }}
           alt_repo_token: ${{ secrets.ALT_REPO_TOKEN }}
@@ -511,24 +523,68 @@ jobs:
 
   ios15_build:
     if: ${{ inputs.build_ios15 }}
-    runs-on: macos-latest
+    # ternary on the string, then fromJSON the result - picking between two arrays
+    # directly inside the expression is the finicky form
+    runs-on: ${{ fromJSON(inputs.ios15_runner == 'self-hosted' && '["self-hosted","macOS","X64"]' || '["macos-latest"]') }}
     permissions:
       contents: read
 
     steps:
       - uses: actions/checkout@v5
 
+      # the shim is built by `python -m ziglang cc`, so this job needs no xcode at
+      # all - it is only here to match the normal job. a self-hosted intel mac will
+      # not have xcode 26, so do not try to select it there.
       - uses: maxim-lobanov/setup-xcode@v1
+        if: runner.environment == 'github-hosted'
         with:
           xcode-version: '26.1.1'
 
       - uses: levibostian/action-hide-sensitive-inputs@v1
 
+      # setup-python cannot work on a self-hosted mac without passwordless sudo: the
+      # macos python it downloads is a .pkg installed with `sudo installer`, and its
+      # sys.prefix is baked in at /Users/runner/hostedtoolcache/Python/... so it is
+      # not relocatable either (AGENT_TOOLSDIRECTORY is ignored).
       - uses: actions/setup-python@v5
+        if: runner.environment == 'github-hosted'
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: Tools/ios15/requirements.txt
+
+      # instead use a 3.12 already on the host, in a venv on PATH, so the later
+      # steps' plain `python3` is that venv and nothing is installed to the host.
+      - name: Use the host's own python 3.12
+        if: runner.environment == 'self-hosted'
+        run: |
+          set -eo pipefail
+          found=""
+          for c in /opt/local/bin/python3.12 /usr/local/bin/python3.12 \
+                   /opt/homebrew/bin/python3.12; do
+            if [ -x "$c" ]; then found="$c"; break; fi
+          done
+          if [ -z "$found" ]; then
+            {
+              echo "### Setup needed on this runner"
+              echo
+              echo "No python3.12 on the host. \`setup-python\` is deliberately not used"
+              echo "here because it needs passwordless sudo. Install one, e.g. MacPorts:"
+              echo
+              echo '```bash'
+              echo "sudo port install python312 py312-pip"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::no python3.12 found - see the job summary"
+            exit 1
+          fi
+          # macports/homebrew pythons are PEP 668 "externally managed", so a bare
+          # pip install into them is refused outright
+          rm -rf "$RUNNER_TEMP/venv"
+          "$found" -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          echo "using $found -> $RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python3" -V
 
       - name: Install the iOS 15 toolchain
         run: |
@@ -541,7 +597,7 @@ jobs:
       - name: Resolve prefix & timestamp
         env:
           IPA_URL: ${{ inputs.ipa_url }}
-          USE_ALT_NAME: ${{ inputs.use_alt_name }}
+          USE_ALT_NAME: ${{ contains(inputs.variants, 'testflight') }}
         run: |
           echo "TIMESTAMP=$(date +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_ENV"
 
@@ -592,6 +648,7 @@ jobs:
           IPA_URL: ${{ inputs.ipa_url }}
           TWEAK_URL: ${{ inputs.tweak_url }}
           DYLIB_URL: ${{ secrets.DYLIB }}
+          RUNNER_ENV: ${{ runner.environment }}
         run: |
           set -eo pipefail
           JOBS="$RUNNER_TEMP/jobs"; : > "$JOBS"
@@ -636,7 +693,16 @@ jobs:
 
           # no ipapatch here on purpose - see the header comment
           install_tools() {
-            brew install --quiet dpkg
+            if [ "$RUNNER_ENV" = "self-hosted" ]; then
+              # no brew assumed - macports provides dpkg there, and installing a
+              # package manager's worth of state per run is not this job's business
+              command -v dpkg-deb >/dev/null 2>&1 || {
+                echo "::error::dpkg-deb missing on this runner; install dpkg (e.g. sudo port install dpkg)"
+                return 1
+              }
+            else
+              brew install --quiet dpkg
+            fi
             python3 -m pip install --quiet --upgrade --break-system-packages \
               git+https://github.com/asdfzxcvbn/pyzule-rw.git
           }
