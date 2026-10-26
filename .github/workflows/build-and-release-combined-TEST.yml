@@ -1200,6 +1200,33 @@ jobs:
             echo "TIMESTAMP=$TIMESTAMP"
           } > Outputs/IPAS/meta.env
 
+      # pulling a ~250 MiB artifact back out costs ~80s, and both linux runners
+      # live on the same host - so hand the files over on disk as well. the upload
+      # below stays as the fallback for a runner that cannot see this directory.
+      - name: Hand the IPAs over on the host as well
+        if: runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ipas-${{ github.run_id }}
+        run: |
+          set -eo pipefail
+          if [ ! -w "$HANDOFF" ]; then
+            echo "::warning::$HANDOFF is not writable here - the publish job will use the artifact"
+            exit 0
+          fi
+          # leftovers from runs that failed before their publish job cleaned up
+          find "$HANDOFF" -mindepth 1 -maxdepth 1 -type d -mtime +1 \
+            -exec rm -rf {} + 2>/dev/null || true
+
+          dst="$HANDOFF/$SLOT"
+          rm -rf "$dst"
+          mkdir -p "$dst"
+          # 2775, or the OTHER runner user cannot delete these again afterwards -
+          # unlinking depends on the directory's mode, not the files'
+          chmod 2775 "$dst"
+          cp Outputs/IPAS/*.ipa Outputs/IPAS/meta.env "$dst/"
+          du -sh "$dst" | sed 's/^/handed over /'
+
       - name: Hand IPAs to the publish jobs
         uses: actions/upload-artifact@v4
         with:
@@ -1256,7 +1283,27 @@ jobs:
 
       - uses: ./.github/actions/linux-prep
 
+      - name: Take the IPAs from the host if they are there
+        id: handoff
+        if: runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ipas-${{ github.run_id }}
+        run: |
+          set -eo pipefail
+          src="$HANDOFF/$SLOT"
+          if [ -d "$src" ] && ls "$src"/*.ipa >/dev/null 2>&1 && [ -f "$src/meta.env" ]; then
+            mkdir -p Outputs/IPAS
+            cp "$src"/*.ipa "$src/meta.env" Outputs/IPAS/
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            du -sh Outputs/IPAS | sed 's/^/took from the host /'
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "nothing at $src - falling back to the artifact"
+          fi
+
       - uses: actions/download-artifact@v4
+        if: steps.handoff.outputs.hit != 'true'
         with:
           name: ipas-${{ github.run_id }}
           path: Outputs/IPAS
@@ -1312,6 +1359,12 @@ jobs:
           tg_api_id: ${{ secrets.TG_API_ID }}
           tg_api_hash: ${{ secrets.TG_API_HASH }}
 
+      - name: Drop the host hand-off copy
+        if: always() && runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ipas-${{ github.run_id }}
+        run: rm -rf "$HANDOFF/$SLOT"
   liquid_glass_linux:
     needs: build_linux
     if: ${{ (contains(inputs.variants, 'liquid-glass')) && (inputs.runner == 'ubuntu-latest' || inputs.runner == 'linux-self-hosted') }}
@@ -1328,7 +1381,27 @@ jobs:
 
       - uses: ./.github/actions/linux-prep
 
+      - name: Take the IPAs from the host if they are there
+        id: handoff
+        if: runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ipas-${{ github.run_id }}
+        run: |
+          set -eo pipefail
+          src="$HANDOFF/$SLOT"
+          if [ -d "$src" ] && ls "$src"/*.ipa >/dev/null 2>&1 && [ -f "$src/meta.env" ]; then
+            mkdir -p Outputs/IPAS
+            cp "$src"/*.ipa "$src/meta.env" Outputs/IPAS/
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            du -sh Outputs/IPAS | sed 's/^/took from the host /'
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "nothing at $src - falling back to the artifact"
+          fi
+
       - uses: actions/download-artifact@v4
+        if: steps.handoff.outputs.hit != 'true'
         with:
           name: ipas-${{ github.run_id }}
           path: Outputs/IPAS
@@ -1385,6 +1458,12 @@ jobs:
           tg_api_id: ${{ secrets.TG_API_ID }}
           tg_api_hash: ${{ secrets.TG_API_HASH }}
 
+      - name: Drop the host hand-off copy
+        if: always() && runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ipas-${{ github.run_id }}
+        run: rm -rf "$HANDOFF/$SLOT"
   ios15_build_linux:
     if: ${{ (inputs.build_ios15) && (inputs.runner == 'ubuntu-latest' || inputs.runner == 'linux-self-hosted') }}
     # ternary on the string, then fromJSON the result - picking between two
@@ -1668,6 +1747,33 @@ jobs:
             echo "TIMESTAMP=$TIMESTAMP"
           } > Outputs/IPAS/meta.env
 
+      # pulling a ~250 MiB artifact back out costs ~80s, and both linux runners
+      # live on the same host - so hand the files over on disk as well. the upload
+      # below stays as the fallback for a runner that cannot see this directory.
+      - name: Hand the IPAs over on the host as well
+        if: runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ios15-ipas-${{ github.run_id }}
+        run: |
+          set -eo pipefail
+          if [ ! -w "$HANDOFF" ]; then
+            echo "::warning::$HANDOFF is not writable here - the publish job will use the artifact"
+            exit 0
+          fi
+          # leftovers from runs that failed before their publish job cleaned up
+          find "$HANDOFF" -mindepth 1 -maxdepth 1 -type d -mtime +1 \
+            -exec rm -rf {} + 2>/dev/null || true
+
+          dst="$HANDOFF/$SLOT"
+          rm -rf "$dst"
+          mkdir -p "$dst"
+          # 2775, or the OTHER runner user cannot delete these again afterwards -
+          # unlinking depends on the directory's mode, not the files'
+          chmod 2775 "$dst"
+          cp Outputs/IPAS/*.ipa Outputs/IPAS/meta.env "$dst/"
+          du -sh "$dst" | sed 's/^/handed over /'
+
       - name: Hand IPAs to the publish job
         uses: actions/upload-artifact@v4
         with:
@@ -1695,7 +1801,27 @@ jobs:
 
       - uses: ./.github/actions/linux-prep
 
+      - name: Take the IPAs from the host if they are there
+        id: handoff
+        if: runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ios15-ipas-${{ github.run_id }}
+        run: |
+          set -eo pipefail
+          src="$HANDOFF/$SLOT"
+          if [ -d "$src" ] && ls "$src"/*.ipa >/dev/null 2>&1 && [ -f "$src/meta.env" ]; then
+            mkdir -p Outputs/IPAS
+            cp "$src"/*.ipa "$src/meta.env" Outputs/IPAS/
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            du -sh Outputs/IPAS | sed 's/^/took from the host /'
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "nothing at $src - falling back to the artifact"
+          fi
+
       - uses: actions/download-artifact@v4
+        if: steps.handoff.outputs.hit != 'true'
         with:
           name: ios15-ipas-${{ github.run_id }}
           path: Outputs/IPAS
@@ -1752,3 +1878,10 @@ jobs:
           tg_chat_id: ${{ secrets.TG_CHAT_ID }}
           tg_api_id: ${{ secrets.TG_API_ID }}
           tg_api_hash: ${{ secrets.TG_API_HASH }}
+
+      - name: Drop the host hand-off copy
+        if: always() && runner.environment == 'self-hosted'
+        env:
+          HANDOFF: /var/lib/eevee-handoff
+          SLOT: ios15-ipas-${{ github.run_id }}
+        run: rm -rf "$HANDOFF/$SLOT"
