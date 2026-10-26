@@ -1,0 +1,67 @@
+name: Prepare a non-GitHub runner
+description: >
+  Put a python 3.12 venv and a writable bin dir on PATH so the build steps need no
+  sudo and install nothing into the host, then fail early if a tool macOS does not
+  ship is absent. Guard the caller's step with runner.environment == 'self-hosted'.
+
+runs:
+  using: composite
+  steps:
+    # setup-python cannot be used here: the macos python it downloads is a .pkg
+    # installed with `sudo installer`, and its sys.prefix is baked in at
+    # /Users/runner/hostedtoolcache/Python/... so it is not relocatable either
+    # (AGENT_TOOLSDIRECTORY is ignored). a public repo's runner should not have
+    # passwordless sudo just to get a python.
+    - name: Use the host's own python 3.12
+      shell: bash
+      run: |
+        set -eo pipefail
+        found=""
+        for c in /opt/local/bin/python3.12 /usr/local/bin/python3.12 \
+                 /opt/homebrew/bin/python3.12; do
+          if [ -x "$c" ]; then found="$c"; break; fi
+        done
+        if [ -z "$found" ]; then
+          {
+            echo "### Setup needed on this runner"
+            echo
+            echo "No python3.12 on the host, and \`setup-python\` needs passwordless"
+            echo "sudo on macOS. Install one, e.g. with MacPorts:"
+            echo
+            echo '```bash'
+            echo "sudo port install python312 py312-pip"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::no python3.12 found - see the job summary"
+          exit 1
+        fi
+        # macports and homebrew pythons are PEP 668 "externally managed", so a bare
+        # pip install into them is refused. a venv also keeps every package off the
+        # host, which suits a build account that is not fully trusted.
+        rm -rf "$RUNNER_TEMP/venv"
+        "$found" -m venv "$RUNNER_TEMP/venv"
+        echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+        echo "using $found -> $RUNNER_TEMP/venv"
+        "$RUNNER_TEMP/venv/bin/python3" -V
+
+    - name: A writable bin dir, so no step needs sudo
+      shell: bash
+      run: |
+        set -eo pipefail
+        mkdir -p "$RUNNER_TEMP/bin"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    - name: Check the tools macOS does not ship
+      shell: bash
+      run: |
+        set -eo pipefail
+        missing=""
+        for t in dpkg-deb jq perl zip unzip plutil sips git curl; do
+          command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+        done
+        [ -x /usr/libexec/PlistBuddy ] || missing="$missing PlistBuddy"
+        if [ -n "$missing" ]; then
+          echo "::error::missing on this runner:$missing - dpkg is the one macOS does not ship (sudo port install dpkg)"
+          exit 1
+        fi
+        echo "all required tools present"
