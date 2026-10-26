@@ -1200,34 +1200,54 @@ jobs:
             echo "TIMESTAMP=$TIMESTAMP"
           } > Outputs/IPAS/meta.env
 
-      # pulling a ~250 MiB artifact back out costs ~80s, and both linux runners
-      # live on the same host - so hand the files over on disk as well. the upload
-      # below stays as the fallback for a runner that cannot see this directory.
+      # pulling a ~250 MiB artifact back out costs ~80s and pushing it in another
+      # ~15s, and both linux runners live on the same host - so hand the files over
+      # on disk and skip the artifact entirely. every failure path below reports a
+      # miss instead of failing, so the upload still happens if anything goes wrong.
       - name: Hand the IPAs over on the host as well
+        id: handoff
         if: runner.environment == 'self-hosted'
         env:
           HANDOFF: /var/lib/eevee-handoff
           SLOT: ipas-${{ github.run_id }}
         run: |
           set -eo pipefail
-          if [ ! -w "$HANDOFF" ]; then
-            echo "::warning::$HANDOFF is not writable here - the publish job will use the artifact"
+          miss() {
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::$1 - uploading the artifact instead"
             exit 0
-          fi
+          }
+
+          [ -w "$HANDOFF" ] || miss "$HANDOFF is not writable here"
+
           # leftovers from runs that failed before their publish job cleaned up
           find "$HANDOFF" -mindepth 1 -maxdepth 1 -type d -mtime +1 \
             -exec rm -rf {} + 2>/dev/null || true
 
           dst="$HANDOFF/$SLOT"
           rm -rf "$dst"
-          mkdir -p "$dst"
+          mkdir -p "$dst" || miss "could not create $dst"
           # 2775, or the OTHER runner user cannot delete these again afterwards -
           # unlinking depends on the directory's mode, not the files'
-          chmod 2775 "$dst"
-          cp Outputs/IPAS/*.ipa Outputs/IPAS/meta.env "$dst/"
+          chmod 2775 "$dst" || miss "could not chmod $dst"
+
+          # a partial copy here would strand the publish job with no artifact to
+          # fall back to, so the hit is only claimed once everything is in place
+          if ! cp Outputs/IPAS/*.ipa Outputs/IPAS/meta.env "$dst/"; then
+            rm -rf "$dst"
+            miss "could not copy the ipas to $dst"
+          fi
+          if [ "$(ls "$dst"/*.ipa 2>/dev/null | wc -l)" -lt 1 ] \
+             || [ ! -f "$dst/meta.env" ]; then
+            rm -rf "$dst"
+            miss "the hand-off copy came out incomplete"
+          fi
+
+          echo "hit=true" >> "$GITHUB_OUTPUT"
           du -sh "$dst" | sed 's/^/handed over /'
 
       - name: Hand IPAs to the publish jobs
+        if: steps.handoff.outputs.hit != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ipas-${{ github.run_id }}
@@ -1747,34 +1767,54 @@ jobs:
             echo "TIMESTAMP=$TIMESTAMP"
           } > Outputs/IPAS/meta.env
 
-      # pulling a ~250 MiB artifact back out costs ~80s, and both linux runners
-      # live on the same host - so hand the files over on disk as well. the upload
-      # below stays as the fallback for a runner that cannot see this directory.
+      # pulling a ~250 MiB artifact back out costs ~80s and pushing it in another
+      # ~15s, and both linux runners live on the same host - so hand the files over
+      # on disk and skip the artifact entirely. every failure path below reports a
+      # miss instead of failing, so the upload still happens if anything goes wrong.
       - name: Hand the IPAs over on the host as well
+        id: handoff
         if: runner.environment == 'self-hosted'
         env:
           HANDOFF: /var/lib/eevee-handoff
           SLOT: ios15-ipas-${{ github.run_id }}
         run: |
           set -eo pipefail
-          if [ ! -w "$HANDOFF" ]; then
-            echo "::warning::$HANDOFF is not writable here - the publish job will use the artifact"
+          miss() {
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::$1 - uploading the artifact instead"
             exit 0
-          fi
+          }
+
+          [ -w "$HANDOFF" ] || miss "$HANDOFF is not writable here"
+
           # leftovers from runs that failed before their publish job cleaned up
           find "$HANDOFF" -mindepth 1 -maxdepth 1 -type d -mtime +1 \
             -exec rm -rf {} + 2>/dev/null || true
 
           dst="$HANDOFF/$SLOT"
           rm -rf "$dst"
-          mkdir -p "$dst"
+          mkdir -p "$dst" || miss "could not create $dst"
           # 2775, or the OTHER runner user cannot delete these again afterwards -
           # unlinking depends on the directory's mode, not the files'
-          chmod 2775 "$dst"
-          cp Outputs/IPAS/*.ipa Outputs/IPAS/meta.env "$dst/"
+          chmod 2775 "$dst" || miss "could not chmod $dst"
+
+          # a partial copy here would strand the publish job with no artifact to
+          # fall back to, so the hit is only claimed once everything is in place
+          if ! cp Outputs/IPAS/*.ipa Outputs/IPAS/meta.env "$dst/"; then
+            rm -rf "$dst"
+            miss "could not copy the ipas to $dst"
+          fi
+          if [ "$(ls "$dst"/*.ipa 2>/dev/null | wc -l)" -lt 1 ] \
+             || [ ! -f "$dst/meta.env" ]; then
+            rm -rf "$dst"
+            miss "the hand-off copy came out incomplete"
+          fi
+
+          echo "hit=true" >> "$GITHUB_OUTPUT"
           du -sh "$dst" | sed 's/^/handed over /'
 
       - name: Hand IPAs to the publish job
+        if: steps.handoff.outputs.hit != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ios15-ipas-${{ github.run_id }}
