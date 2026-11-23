@@ -378,7 +378,7 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [ "$SPOTIFY_VERSION" != "9.2.0" ]; then
+          if [[ "$SPOTIFY_VERSION" != * ]]; then
             skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
           fi
           if ! xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1; then
@@ -907,7 +907,7 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [ "$SPOTIFY_VERSION" != "9.2.0" ]; then
+          if [[ "$SPOTIFY_VERSION" != * ]]; then
             skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
           fi
           if ! xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1; then
@@ -1290,7 +1290,7 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [ "$SPOTIFY_VERSION" != "9.2.0" ]; then
+          if [[ "$SPOTIFY_VERSION" != * ]]; then
             skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
           fi
           [ -x "$BIN/ldid" ] || skip "no theos linux toolchain under $THEOS"
@@ -1907,7 +1907,7 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [ "$SPOTIFY_VERSION" != "9.2.0" ]; then
+          if [[ "$SPOTIFY_VERSION" != * ]]; then
             skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
           fi
           [ -x "$BIN/ldid" ] || skip "no theos linux toolchain under $THEOS"
