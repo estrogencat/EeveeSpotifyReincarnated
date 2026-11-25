@@ -240,6 +240,8 @@ static void note_fixup(const void *fieldaddr, const void *name, const void *base
     shim_log("kpfix-opt", b);
 }
 
+static void kp_stub_classes(void *pattern, const void *base);
+
 const void *shim_getkeypath(void *pattern, const void *args);
 const void *shim_getkeypath(void *pattern, const void *args)
 {
@@ -255,6 +257,7 @@ const void *shim_getkeypath(void *pattern, const void *args)
         if ((uintptr_t)leaf & 1)
             note_fixup((const char *)pattern + 12, (const void *)((uintptr_t)leaf & ~(uintptr_t)1), base);
     }
+    kp_stub_classes(pattern, base);
     if (!g_gkp) g_gkp = (GetKeyPath)dlsym(RTLD_DEFAULT, "swift_getKeyPathImpl");
     return g_gkp ? g_gkp(pattern, args) : 0;
 }
@@ -1926,6 +1929,140 @@ void shim_regex_dynmember(void *out)
 
 #include <objc/runtime.h>
 #include <objc/message.h>
+
+/* ios 15 gives the bar's info collection view a readable-width constraint at
+   999.5, which outranks the cover's 999 aspect ratio and leaves the cover 0 wide
+   (so its art never loads). drop it below the cover before each layout. */
+static void (*g_icv_layout)(id, SEL);
+
+static int icv_eq(const char *a, const char *b)
+{
+    while (*a && *a == *b) a++, b++;
+    return *a == *b;
+}
+
+static void icv_layout(id self, SEL cmd)
+{
+    id cs = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("constraints"));
+    unsigned long n = cs ? ((unsigned long (*)(id, SEL))objc_msgSend)(cs, sel_registerName("count")) : 0, i;
+    for (i = 0; i < n; i++) {
+        id c = ((id (*)(id, SEL, unsigned long))objc_msgSend)(cs, sel_registerName("objectAtIndex:"), i);
+        id ident = ((id (*)(id, SEL))objc_msgSend)(c, sel_registerName("identifier"));
+        const char *s = ident ? ((const char *(*)(id, SEL))objc_msgSend)(ident, sel_registerName("UTF8String")) : 0;
+        if (s && icv_eq(s, "UIView-width-readableContentGuide-constraint")
+                && ((float (*)(id, SEL))objc_msgSend)(c, sel_registerName("priority")) > 250.0f)
+            ((void (*)(id, SEL, float))objc_msgSend)(c, sel_registerName("setPriority:"), 250.0f);
+    }
+    if (g_icv_layout) g_icv_layout(self, cmd);
+}
+
+__attribute__((constructor)) static void npbar_cover_init(void)
+{
+    Class k = objc_getClass("_TtC18NowPlaying_BarImpl25InformationCollectionView");
+    SEL sel = sel_registerName("layoutSubviews");
+    Method m;
+    if (!k || !(m = class_getInstanceMethod(k, sel))) return;
+    g_icv_layout = (void (*)(id, SEL))method_getImplementation(m);
+    if (!class_addMethod(k, sel, (IMP)icv_layout, method_getTypeEncoding(m)))
+        g_icv_layout = (void (*)(id, SEL))method_setImplementation(m, (IMP)icv_layout);
+}
+
+/* a keypath naming an objc class that ios 15 lacks (So<len><name>C) makes
+   swift_getKeyPath fatal with "could not demangle keypath type". an empty
+   NSObject subclass of that name is enough for it to resolve. */
+static int kp_ident(unsigned char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+}
+
+static void kp_stub_name(const char *p, const char *end)
+{
+    while (p < end && *p) {
+        unsigned char c = (unsigned char)*p;
+        if (c >= 1 && c <= 0x17) { p += 5; continue; }
+        if (c >= 0x18 && c <= 0x1f) { p += 9; continue; }
+        if (c == 'S' && p + 2 < end && p[1] == 'o' && p[2] >= '1' && p[2] <= '9') {
+            const char *q = p + 2;
+            int len = 0, i, ok = 1;
+            char name[128];
+            while (q < end && *q >= '0' && *q <= '9' && len < 1000) len = len * 10 + (*q++ - '0');
+            if (len > 0 && len < 128 && q + len < end && q[len] == 'C' && q[0] >= 'A' && q[0] <= 'Z') {
+                for (i = 0; i < len; i++) {
+                    if (!kp_ident((unsigned char)q[i])) { ok = 0; break; }
+                    name[i] = q[i];
+                }
+                if (ok) {
+                    name[len] = 0;
+                    if (!objc_getClass(name)) {
+                        Class k = objc_allocateClassPair(objc_getClass("NSObject"), name, 0);
+                        if (k) objc_registerClassPair(k);
+                        shim_log("kpstub", name);
+                    }
+                    p = q + len + 1;
+                    continue;
+                }
+            }
+        }
+        p++;
+    }
+}
+
+static const void *kp_seen[4096];
+
+static int kp_first_visit(const void *pattern)
+{
+    uintptr_t h = ((uintptr_t)pattern >> 2) & 4095;
+    int i;
+    for (i = 0; i < 4096; i++) {
+        const void **slot = &kp_seen[(h + i) & 4095];
+        const void *cur = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
+        if (cur == pattern) return 0;
+        if (!cur) {
+            const void *exp = 0;
+            if (__atomic_compare_exchange_n(slot, &exp, pattern, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                return 1;
+            if (exp == pattern) return 0;
+        }
+    }
+    return 1;
+}
+
+static const char *kp_text_end(const void *base)
+{
+    const uint32_t *h = (const uint32_t *)base;
+    const char *lc = (const char *)base + 32;
+    uint32_t i;
+    if (h[0] != 0xfeedfacf) return 0;
+    for (i = 0; i < h[4]; i++) {
+        uint32_t cmd = *(const uint32_t *)lc, sz = *(const uint32_t *)(lc + 4);
+        if (cmd == 0x19 && lc[8] == '_' && lc[9] == '_' && lc[10] == 'T' && lc[11] == 'E'
+                && lc[12] == 'X' && lc[13] == 'T' && lc[14] == 0)
+            return (const char *)base + *(const uint64_t *)(lc + 32);
+        lc += sz;
+    }
+    return 0;
+}
+
+/* root and leaf types sit at +8/+12, and every word of the component buffer
+   from +24 may be a relative reference to an intermediate type. */
+static void kp_stub_classes(void *pattern, const void *base)
+{
+    const int32_t *w = (const int32_t *)pattern;
+    const char *end, *t, *lim;
+    uint32_t size, o;
+    if (!base || !kp_first_visit(pattern)) return;
+    end = kp_text_end(base);
+    if (!end) return;
+    size = (uint32_t)w[5] & 0x00ffffff;
+    if (size > 4096) size = 4096;
+    for (o = 8; o < 24 + size; o += 4) {
+        if (o == 16 || o == 20) continue;
+        t = (const char *)((uintptr_t)((const char *)pattern + o + w[o / 4]) & ~(uintptr_t)1);
+        if (t < (const char *)base || t >= end) continue;
+        lim = end - t > 256 ? t + 256 : end;
+        kp_stub_name(t, lim);
+    }
+}
 
 extern id objc_retain(id);
 
