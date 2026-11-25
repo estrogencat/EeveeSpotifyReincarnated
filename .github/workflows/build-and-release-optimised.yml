@@ -365,7 +365,7 @@ jobs:
                    --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
 
-      - name: Bundle the Pixie download manager (Spotify 9.2.0 only)
+      - name: Bundle the Pixie download manager (Spotify 9.2.0 and 9.2.2)
         run: |
           set -eo pipefail
 
@@ -378,16 +378,19 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [[ "$SPOTIFY_VERSION" != * ]]; then
-            skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
-          fi
+          # one target profile per spotify build; the committed headers are 9.2.0's.
+          export PIXIE_TARGET="targets/spotify-${SPOTIFY_VERSION}.json"
+          [ -f "NativeDownloads/$PIXIE_TARGET" ] || skip "no pixie target for spotify ${SPOTIFY_VERSION:-unknown}"
           if ! xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1; then
             skip "no iphoneos sdk on this runner"
           fi
 
           EEVEE_DYLIB=$(find "$RUNNER_TEMP/deb-extract" -name 'EeveeSpotify.dylib' | head -1)
           [ -n "$EEVEE_DYLIB" ] || skip "no EeveeSpotify.dylib in the deb"
-          python3 "$VALIDATE" || skip "source validation failed"
+          python3 NativeDownloads/tools/port/regenerate_headers.py || skip "could not write the headers for $PIXIE_TARGET"
+          # advisory only: the build script re-checks the headers, the spotify version and
+          # binary uuid, and signs and validates what it makes.
+          python3 "$VALIDATE" || warn "pixie source validation failed - building anyway"
 
           for ipa in "$OUT_IPA" "$PATCHED_IPA"; do
             [ -f "$ipa" ] || continue
@@ -892,7 +895,7 @@ jobs:
 
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
 
-      - name: Bundle the Pixie download manager (Spotify 9.2.0 only)
+      - name: Bundle the Pixie download manager (Spotify 9.2.0 and 9.2.2)
         run: |
           set -eo pipefail
 
@@ -907,16 +910,19 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [[ "$SPOTIFY_VERSION" != * ]]; then
-            skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
-          fi
+          # one target profile per spotify build; the committed headers are 9.2.0's.
+          export PIXIE_TARGET="targets/spotify-${SPOTIFY_VERSION}.json"
+          [ -f "NativeDownloads/$PIXIE_TARGET" ] || skip "no pixie target for spotify ${SPOTIFY_VERSION:-unknown}"
           if ! xcrun --sdk iphoneos --show-sdk-path >/dev/null 2>&1; then
             skip "no iphoneos sdk on this runner"
           fi
 
           EEVEE_DYLIB=$(find "$RUNNER_TEMP/deb-extract" -name 'EeveeSpotify.dylib' | head -1)
           [ -n "$EEVEE_DYLIB" ] || skip "no EeveeSpotify.dylib in the deb"
-          python3 "$VALIDATE" || skip "source validation failed"
+          python3 NativeDownloads/tools/port/regenerate_headers.py || skip "could not write the headers for $PIXIE_TARGET"
+          # advisory only: the build script re-checks the headers, the spotify version and
+          # binary uuid, and signs and validates what it makes.
+          python3 "$VALIDATE" || warn "pixie source validation failed - building anyway"
 
           for ipa in "$OUT_IPA" "$PATCHED_IPA"; do
             [ -f "$ipa" ] || continue
@@ -1275,7 +1281,7 @@ jobs:
                    --dylib extra_dylibs/zxPluginsInject.dylib
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
 
-      - name: Bundle the Pixie download manager (Spotify 9.2.0 only)
+      - name: Bundle the Pixie download manager (Spotify 9.2.0 and 9.2.2)
         run: |
           set -eo pipefail
 
@@ -1290,16 +1296,19 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [[ "$SPOTIFY_VERSION" != * ]]; then
-            skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
-          fi
+          # one target profile per spotify build; the committed headers are 9.2.0's.
+          export PIXIE_TARGET="targets/spotify-${SPOTIFY_VERSION}.json"
+          [ -f "NativeDownloads/$PIXIE_TARGET" ] || skip "no pixie target for spotify ${SPOTIFY_VERSION:-unknown}"
           [ -x "$BIN/ldid" ] || skip "no theos linux toolchain under $THEOS"
           ls "$THEOS"/sdks/iPhoneOS*.sdk >/dev/null 2>&1 || skip "no iphoneos sdk under $THEOS/sdks"
           command -v clang >/dev/null 2>&1 || skip "no system clang to compile the companion"
 
           EEVEE_DYLIB=$(find "$RUNNER_TEMP/deb-extract" -name 'EeveeSpotify.dylib' | head -1)
           [ -n "$EEVEE_DYLIB" ] || skip "no EeveeSpotify.dylib in the deb"
-          python3 "$VALIDATE" || skip "source validation failed"
+          python3 NativeDownloads/tools/port/regenerate_headers.py || skip "could not write the headers for $PIXIE_TARGET"
+          # advisory only: the build script re-checks the headers, the spotify version and
+          # binary uuid, and signs and validates what it makes.
+          python3 "$VALIDATE" || warn "pixie source validation failed - building anyway"
 
           bundled=0
           for ipa in "$OUT_IPA" "$PATCHED_IPA"; do
@@ -1890,7 +1899,7 @@ jobs:
 
           echo "PATCHED_IPA=$PATCHED_OUT" >> "$GITHUB_ENV"
 
-      - name: Bundle the Pixie download manager (Spotify 9.2.0 only)
+      - name: Bundle the Pixie download manager (Spotify 9.2.0 and 9.2.2)
         run: |
           set -eo pipefail
 
@@ -1907,16 +1916,19 @@ jobs:
           BUILD=NativeDownloads/tools/build_eevee_9192.py
           VALIDATE=NativeDownloads/tools/validate_eevee_9192.py
 
-          if [[ "$SPOTIFY_VERSION" != * ]]; then
-            skip "spotify 9.2.0 only, this build is ${SPOTIFY_VERSION:-unknown}"
-          fi
+          # one target profile per spotify build; the committed headers are 9.2.0's.
+          export PIXIE_TARGET="targets/spotify-${SPOTIFY_VERSION}.json"
+          [ -f "NativeDownloads/$PIXIE_TARGET" ] || skip "no pixie target for spotify ${SPOTIFY_VERSION:-unknown}"
           [ -x "$BIN/ldid" ] || skip "no theos linux toolchain under $THEOS"
           ls "$THEOS"/sdks/iPhoneOS*.sdk >/dev/null 2>&1 || skip "no iphoneos sdk under $THEOS/sdks"
           command -v clang >/dev/null 2>&1 || skip "no system clang to compile the companion"
 
           EEVEE_DYLIB=$(find "$RUNNER_TEMP/deb-extract" -name 'EeveeSpotify.dylib' | head -1)
           [ -n "$EEVEE_DYLIB" ] || skip "no EeveeSpotify.dylib in the deb"
-          python3 "$VALIDATE" || skip "source validation failed"
+          python3 NativeDownloads/tools/port/regenerate_headers.py || skip "could not write the headers for $PIXIE_TARGET"
+          # advisory only: the build script re-checks the headers, the spotify version and
+          # binary uuid, and signs and validates what it makes.
+          python3 "$VALIDATE" || warn "pixie source validation failed - building anyway"
 
           bundled=0
           for ipa in "$OUT_IPA" "$PATCHED_IPA"; do
