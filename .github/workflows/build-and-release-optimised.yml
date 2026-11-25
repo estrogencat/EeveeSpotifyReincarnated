@@ -114,7 +114,8 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ inputs.runner == 'macos-latest' || inputs.runner == 'macos-self-hosted' }}
+    # skipped when the main ipa has nowhere to go, e.g. an ios 15 only run
+    if: ${{ (inputs.upload_local || inputs.extra_upload != 'none') && (inputs.runner == 'macos-latest' || inputs.runner == 'macos-self-hosted') }}
     # ternary on the string, then fromJSON the result - picking between two
     # arrays directly inside the expression is the finicky form
     runs-on: ${{ fromJSON(inputs.runner == 'macos-self-hosted' && '["self-hosted","macOS","X64"]' || '["macos-latest"]') }}
@@ -1047,7 +1048,8 @@ jobs:
           tg_api_id: ${{ secrets.TG_API_ID }}
           tg_api_hash: ${{ secrets.TG_API_HASH }}
   build_linux:
-    if: ${{ inputs.runner == 'ubuntu-latest' || inputs.runner == 'linux-self-hosted' }}
+    # skipped when the main ipa has nowhere to go, e.g. an ios 15 only run
+    if: ${{ (inputs.upload_local || inputs.extra_upload != 'none') && (inputs.runner == 'ubuntu-latest' || inputs.runner == 'linux-self-hosted') }}
     # ternary on the string, then fromJSON the result - picking between two
     # arrays directly inside the expression is the finicky form
     runs-on: ${{ fromJSON(inputs.runner == 'linux-self-hosted' && '["self-hosted","Linux","X64"]' || '["ubuntu-latest"]') }}
