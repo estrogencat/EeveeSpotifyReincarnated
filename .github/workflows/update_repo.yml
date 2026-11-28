@@ -93,20 +93,15 @@ jobs:
                 if [ "$IS_TF" = true ]; then BUNDLE="com.spotify.client.tf"; else BUNDLE="com.spotify.client"; fi ;;
             esac
 
-            BASE_VER=$(echo "$VERSION" | cut -d. -f1-3 | tr -d '.')
+            # spotify packs major, minor, a 2-digit patch and a 5-digit build: 9.2.2 (2587) is 920202587
+            IFS=. read -r V1 V2 V3 V4 <<< "$VERSION"
+            BASE_VER=$(printf "%d%d%02d" "$((10#${V1:-0}))" "$((10#${V2:-0}))" "$((10#${V3:-0}))")
 
-            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              V1="${BASH_REMATCH[1]}"
-              V2="${BASH_REMATCH[2]}"
-              V3="${BASH_REMATCH[3]}"
-              V4="${BASH_REMATCH[4]}"
-              V4_PADDED=$(printf "%05d" "$V4")
-              FALLBACK_VER="${V1}${V2}${V3}${V4_PADDED}"
+            if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              FALLBACK_VER="${BASE_VER}$(printf "%05d" "$((10#$V4))")"
               IS_4_PART=true
             else
-              RAW_VER="${VERSION//./}"
-              PAD="${RAW_VER}000000000"
-              FALLBACK_VER="${PAD:0:9}"
+              FALLBACK_VER="${BASE_VER}00000"
               IS_4_PART=false
             fi
 
